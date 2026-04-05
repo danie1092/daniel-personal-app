@@ -5,13 +5,15 @@ import { useTamagotchi } from "@/hooks/useTamagotchi";
 
 const CANVAS_SIZE = 128;
 
-// Kiraritchi sprite: 3 layers, each 48x48 box, same destXY
-const SIZE = 48;
-const SCALE = 2;
-const DEST_SIZE = SIZE * SCALE; // 96px
-const BODY_SY = 48;   // 몸통
-const ACC_SY = 96;     // 머리장식/귀
-const EYE_SY = 0;      // 눈/표정
+// Kiraritchi sprite: 800×174, frame width=40, scale=1
+const FRAME_W = 40;
+// 3 layers with source-relative Y offsets (anchor = body at sy=30)
+const BODY_SY = 30;
+const BODY_SH = 56;
+const EYE_SY = 0;
+const EYE_SH = 30;
+const ACC_SY = 95;
+const ACC_SH = 25;
 
 // Background tile: 4th tile in Backgrounds - Sanrio.png
 const BG_TILE_X = 391;
@@ -54,8 +56,8 @@ const MOOD_INTERVALS: Record<Mood, number> = {
 type AIState = "wait" | "decide" | "walkLeft" | "walkRight" | "idle";
 
 const WALK_SPEED = 1; // px per tick
-const CHAR_MIN_X = 0;
-const CHAR_MAX_X = CANVAS_SIZE - DEST_SIZE;
+const CHAR_MIN_X = 8;
+const CHAR_MAX_X = CANVAS_SIZE - FRAME_W - 8;
 
 const MENU_ITEMS = [
   { icon: "🍚", label: "밥" },
@@ -90,7 +92,7 @@ export default function TamagotchiPage() {
   // AI state machine refs
   const aiStateRef = useRef<AIState>("wait");
   const aiTimerRef = useRef(0);
-  const charXRef = useRef(Math.floor((CANVAS_SIZE - DEST_SIZE) / 2));
+  const charXRef = useRef(Math.floor((CANVAS_SIZE - FRAME_W) / 2));
   const charYOffsetRef = useRef(0); // bounce offset
   const facingLeftRef = useRef(false);
   const isWalkingRef = useRef(false);
@@ -136,28 +138,32 @@ export default function TamagotchiPage() {
       );
     }
 
-    // 3-layer sprite: body → accessory → eyes, all same destXY
+    // 3-layer sprite: body(anchor) → accessory → eyes
+    // destY relative to body: offset = (layerSY - BODY_SY)
     const frames = framesRef.current;
     const fi = frameRef.current;
 
     if (charImgRef.current && frames.length > 0) {
       const frameIdx = frames[fi % frames.length];
-      const sx = frameIdx * SIZE;
+      const sx = frameIdx * FRAME_W;
       const dx = charXRef.current;
-      const dy = CANVAS_SIZE - DEST_SIZE + charYOffsetRef.current;
+      const groundY = CANVAS_SIZE - 4 + charYOffsetRef.current;
+      const bodyDY = groundY - BODY_SH;
+      const eyeDY = bodyDY + (EYE_SY - BODY_SY);   // 30px above body
+      const accDY = bodyDY + (ACC_SY - BODY_SY);    // 65px below body top
       const img = charImgRef.current;
 
       ctx.save();
       if (facingLeftRef.current) {
-        ctx.translate(dx + DEST_SIZE, dy);
+        ctx.translate(dx + FRAME_W, 0);
         ctx.scale(-1, 1);
-        ctx.drawImage(img, sx, BODY_SY, SIZE, SIZE, 0, 0, DEST_SIZE, DEST_SIZE);
-        ctx.drawImage(img, sx, ACC_SY,  SIZE, SIZE, 0, 0, DEST_SIZE, DEST_SIZE);
-        ctx.drawImage(img, sx, EYE_SY,  SIZE, SIZE, 0, 0, DEST_SIZE, DEST_SIZE);
+        ctx.drawImage(img, sx, BODY_SY, FRAME_W, BODY_SH, 0, bodyDY, FRAME_W, BODY_SH);
+        ctx.drawImage(img, sx, ACC_SY,  FRAME_W, ACC_SH,  0, accDY,  FRAME_W, ACC_SH);
+        ctx.drawImage(img, sx, EYE_SY,  FRAME_W, EYE_SH,  0, eyeDY,  FRAME_W, EYE_SH);
       } else {
-        ctx.drawImage(img, sx, BODY_SY, SIZE, SIZE, dx, dy, DEST_SIZE, DEST_SIZE);
-        ctx.drawImage(img, sx, ACC_SY,  SIZE, SIZE, dx, dy, DEST_SIZE, DEST_SIZE);
-        ctx.drawImage(img, sx, EYE_SY,  SIZE, SIZE, dx, dy, DEST_SIZE, DEST_SIZE);
+        ctx.drawImage(img, sx, BODY_SY, FRAME_W, BODY_SH, dx, bodyDY, FRAME_W, BODY_SH);
+        ctx.drawImage(img, sx, ACC_SY,  FRAME_W, ACC_SH,  dx, accDY,  FRAME_W, ACC_SH);
+        ctx.drawImage(img, sx, EYE_SY,  FRAME_W, EYE_SH,  dx, eyeDY,  FRAME_W, EYE_SH);
       }
       ctx.restore();
     }
@@ -248,7 +254,7 @@ export default function TamagotchiPage() {
     // Initialize AI
     aiStateRef.current = "wait";
     aiTimerRef.current = 2000 + Math.random() * 2000;
-    charXRef.current = Math.floor((CANVAS_SIZE - DEST_SIZE) / 2);
+    charXRef.current = Math.floor((CANVAS_SIZE - FRAME_W) / 2);
 
     // AI tick at 150ms
     const aiInterval = setInterval(() => {
