@@ -4,15 +4,14 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useTamagotchi } from "@/hooks/useTamagotchi";
 
 const CANVAS_SIZE = 128;
-const FRAME_W = 40;
 
-// Sprite sheet: 800×174, 2 rows
-// Row 1 (y=0):  eye/face overlay, h=30
-// Row 2 (y=30): body, h=86
-const EYE_ROW_Y = 0;
-const EYE_H = 30;
-const BODY_ROW_Y = 30;
-const BODY_H = 86;
+// Kiraritchi sprite: 3 layers, each 48x48 box, same destXY
+const SIZE = 48;
+const SCALE = 2;
+const DEST_SIZE = SIZE * SCALE; // 96px
+const BODY_SY = 48;   // 몸통
+const ACC_SY = 96;     // 머리장식/귀
+const EYE_SY = 0;      // 눈/표정
 
 // Background tile: 4th tile in Backgrounds - Sanrio.png
 const BG_TILE_X = 391;
@@ -55,8 +54,8 @@ const MOOD_INTERVALS: Record<Mood, number> = {
 type AIState = "wait" | "decide" | "walkLeft" | "walkRight" | "idle";
 
 const WALK_SPEED = 1; // px per tick
-const CHAR_MIN_X = 8;
-const CHAR_MAX_X = CANVAS_SIZE - FRAME_W - 8;
+const CHAR_MIN_X = 0;
+const CHAR_MAX_X = CANVAS_SIZE - DEST_SIZE;
 
 const MENU_ITEMS = [
   { icon: "🍚", label: "밥" },
@@ -91,7 +90,7 @@ export default function TamagotchiPage() {
   // AI state machine refs
   const aiStateRef = useRef<AIState>("wait");
   const aiTimerRef = useRef(0);
-  const charXRef = useRef(Math.floor((CANVAS_SIZE - FRAME_W) / 2));
+  const charXRef = useRef(Math.floor((CANVAS_SIZE - DEST_SIZE) / 2));
   const charYOffsetRef = useRef(0); // bounce offset
   const facingLeftRef = useRef(false);
   const isWalkingRef = useRef(false);
@@ -137,47 +136,28 @@ export default function TamagotchiPage() {
       );
     }
 
-    // Always use mood frames (walking only changes X position)
+    // 3-layer sprite: body → accessory → eyes, all same destXY
     const frames = framesRef.current;
     const fi = frameRef.current;
 
     if (charImgRef.current && frames.length > 0) {
-      const sx = frames[fi % frames.length] * FRAME_W;
+      const frameIdx = frames[fi % frames.length];
+      const sx = frameIdx * SIZE;
       const dx = charXRef.current;
-      // Body: feet at ground level
-      const bodyDy = CANVAS_SIZE - BODY_H - 4 + charYOffsetRef.current;
-      // Eyes: overlay on top of body head area (same destY as body top)
-      const eyeDy = bodyDy;
+      const dy = CANVAS_SIZE - DEST_SIZE + charYOffsetRef.current;
+      const img = charImgRef.current;
 
       ctx.save();
       if (facingLeftRef.current) {
-        ctx.translate(dx + FRAME_W, 0);
+        ctx.translate(dx + DEST_SIZE, dy);
         ctx.scale(-1, 1);
-        // Draw body layer
-        ctx.drawImage(
-          charImgRef.current,
-          sx, BODY_ROW_Y, FRAME_W, BODY_H,
-          0, bodyDy, FRAME_W, BODY_H
-        );
-        // Draw eye overlay on top
-        ctx.drawImage(
-          charImgRef.current,
-          sx, EYE_ROW_Y, FRAME_W, EYE_H,
-          0, eyeDy, FRAME_W, EYE_H
-        );
+        ctx.drawImage(img, sx, BODY_SY, SIZE, SIZE, 0, 0, DEST_SIZE, DEST_SIZE);
+        ctx.drawImage(img, sx, ACC_SY,  SIZE, SIZE, 0, 0, DEST_SIZE, DEST_SIZE);
+        ctx.drawImage(img, sx, EYE_SY,  SIZE, SIZE, 0, 0, DEST_SIZE, DEST_SIZE);
       } else {
-        // Draw body layer
-        ctx.drawImage(
-          charImgRef.current,
-          sx, BODY_ROW_Y, FRAME_W, BODY_H,
-          dx, bodyDy, FRAME_W, BODY_H
-        );
-        // Draw eye overlay on top
-        ctx.drawImage(
-          charImgRef.current,
-          sx, EYE_ROW_Y, FRAME_W, EYE_H,
-          dx, eyeDy, FRAME_W, EYE_H
-        );
+        ctx.drawImage(img, sx, BODY_SY, SIZE, SIZE, dx, dy, DEST_SIZE, DEST_SIZE);
+        ctx.drawImage(img, sx, ACC_SY,  SIZE, SIZE, dx, dy, DEST_SIZE, DEST_SIZE);
+        ctx.drawImage(img, sx, EYE_SY,  SIZE, SIZE, dx, dy, DEST_SIZE, DEST_SIZE);
       }
       ctx.restore();
     }
@@ -268,7 +248,7 @@ export default function TamagotchiPage() {
     // Initialize AI
     aiStateRef.current = "wait";
     aiTimerRef.current = 2000 + Math.random() * 2000;
-    charXRef.current = Math.floor((CANVAS_SIZE - FRAME_W) / 2);
+    charXRef.current = Math.floor((CANVAS_SIZE - DEST_SIZE) / 2);
 
     // AI tick at 150ms
     const aiInterval = setInterval(() => {
