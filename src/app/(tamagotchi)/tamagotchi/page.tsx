@@ -4,16 +4,16 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useTamagotchi } from "@/hooks/useTamagotchi";
 
 const CANVAS_SIZE = 128;
-const FRAME_W = 32;
-const FRAME_H = 56;
+const FRAME_W = 40;
+const FRAME_H = 86;
 
 // Background tile: 4th tile in Backgrounds - Sanrio.png
 const BG_TILE_X = 391;
 const BG_TILE_Y = 1;
 const BG_TILE_SIZE = 128;
 
-// Kiraritchi row
-const CHAR_ROW_Y = 30;
+// Kiraritchi row (sourceY=0, full height from top including headpiece)
+const CHAR_ROW_Y = 0;
 
 // ── Frame sets & intervals per mood ──
 const FRAMES_IDLE = [13, 14, 15, 16];
