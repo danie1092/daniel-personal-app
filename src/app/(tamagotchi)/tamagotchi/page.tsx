@@ -5,29 +5,25 @@ import { useTamagotchi } from "@/hooks/useTamagotchi";
 
 const CANVAS_SIZE = 128;
 const FRAME_W = 32;
-const FRAME_H = 50;
+const FRAME_H = 56;
 
 // Background tile: 4th tile in Backgrounds - Sanrio.png
 const BG_TILE_X = 391;
 const BG_TILE_Y = 1;
 const BG_TILE_SIZE = 128;
 
-// Kiraritchi row (y=36~85)
-const CHAR_ROW_Y = 36;
+// Kiraritchi row
+const CHAR_ROW_Y = 30;
 
 // ── Frame sets & intervals per mood ──
 const FRAMES_IDLE = [13, 14, 15, 16];
 const FRAMES_HAPPY = [3, 6];
 const FRAMES_HUNGRY = [9, 12];
 const FRAMES_SICK = [17, 13];
-const FRAMES_WALK = [0, 1];
-
 const INTERVAL_IDLE = 600;
 const INTERVAL_HAPPY = 400;
 const INTERVAL_HUNGRY = 800;
 const INTERVAL_SICK = 600;
-const INTERVAL_WALK = 300;
-
 type Mood = "sick" | "hungry" | "happy" | "idle";
 
 function getMood(hunger: number, happy: number, sick: boolean): Mood {
@@ -94,7 +90,6 @@ export default function TamagotchiPage() {
   const charXRef = useRef(Math.floor((CANVAS_SIZE - FRAME_W) / 2));
   const charYOffsetRef = useRef(0); // bounce offset
   const facingLeftRef = useRef(false);
-  const walkFrameRef = useRef(0);
   const isWalkingRef = useRef(false);
 
   const [selected, setSelected] = useState<number | null>(null);
@@ -138,10 +133,9 @@ export default function TamagotchiPage() {
       );
     }
 
-    // Determine which frames to use
-    const walking = isWalkingRef.current;
-    const frames = walking ? FRAMES_WALK : framesRef.current;
-    const fi = walking ? walkFrameRef.current : frameRef.current;
+    // Always use mood frames (walking only changes X position)
+    const frames = framesRef.current;
+    const fi = frameRef.current;
 
     if (charImgRef.current && frames.length > 0) {
       const sx = frames[fi % frames.length] * FRAME_W;
@@ -260,10 +254,6 @@ export default function TamagotchiPage() {
     // AI tick at 150ms
     const aiInterval = setInterval(() => {
       aiTick();
-      // Advance walk frame
-      if (isWalkingRef.current) {
-        walkFrameRef.current = (walkFrameRef.current + 1) % FRAMES_WALK.length;
-      }
       draw();
     }, 150);
 
