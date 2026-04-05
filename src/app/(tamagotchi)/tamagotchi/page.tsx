@@ -6,7 +6,6 @@ import { useTamagotchi } from "@/hooks/useTamagotchi";
 const CANVAS_SIZE = 128;
 const FRAME_W = 32;
 const FRAME_H = 50;
-const FRAME_INTERVAL = 600;
 
 // Background tile: 4th tile in Backgrounds - Sanrio.png
 const BG_TILE_X = 391;
@@ -16,20 +15,18 @@ const BG_TILE_SIZE = 128;
 // Kiraritchi row (y=36~85)
 const CHAR_ROW_Y = 36;
 
-// Animation frame sets by mood
+// ── Frame sets & intervals per mood ──
 const FRAMES_IDLE = [13, 14, 15, 16];
 const FRAMES_HAPPY = [3, 6];
 const FRAMES_HUNGRY = [9, 12];
 const FRAMES_SICK = [17, 13];
+const FRAMES_WALK = [0, 1];
 
-const MENU_ITEMS = [
-  { icon: "🍚", label: "밥" },
-  { icon: "💡", label: "불" },
-  { icon: "🎮", label: "놀이" },
-  { icon: "💊", label: "약" },
-  { icon: "🚿", label: "화장실" },
-  { icon: "📊", label: "상태" },
-];
+const INTERVAL_IDLE = 600;
+const INTERVAL_HAPPY = 400;
+const INTERVAL_HUNGRY = 800;
+const INTERVAL_SICK = 600;
+const INTERVAL_WALK = 300;
 
 type Mood = "sick" | "hungry" | "happy" | "idle";
 
@@ -47,6 +44,29 @@ const MOOD_FRAMES: Record<Mood, number[]> = {
   sick: FRAMES_SICK,
 };
 
+const MOOD_INTERVALS: Record<Mood, number> = {
+  idle: INTERVAL_IDLE,
+  happy: INTERVAL_HAPPY,
+  hungry: INTERVAL_HUNGRY,
+  sick: INTERVAL_SICK,
+};
+
+// ── AI states ──
+type AIState = "wait" | "decide" | "walkLeft" | "walkRight" | "idle";
+
+const WALK_SPEED = 1; // px per tick
+const CHAR_MIN_X = 8;
+const CHAR_MAX_X = CANVAS_SIZE - FRAME_W - 8;
+
+const MENU_ITEMS = [
+  { icon: "🍚", label: "밥" },
+  { icon: "💡", label: "불" },
+  { icon: "🎮", label: "놀이" },
+  { icon: "💊", label: "약" },
+  { icon: "🚿", label: "화장실" },
+  { icon: "📊", label: "상태" },
+];
+
 // Stage label by age
 function getStage(age: number): string {
   if (age < 1) return "베이비";
@@ -59,15 +79,31 @@ export default function TamagotchiPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgImgRef = useRef<HTMLImageElement | null>(null);
   const charImgRef = useRef<HTMLImageElement | null>(null);
+
+  // Animation refs
   const frameRef = useRef(0);
   const moodRef = useRef<Mood>("idle");
   const framesRef = useRef(FRAMES_IDLE);
+  const intervalRef = useRef(INTERVAL_IDLE);
   const poopRef = useRef(0);
+  const animTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // AI state machine refs
+  const aiStateRef = useRef<AIState>("wait");
+  const aiTimerRef = useRef(0);
+  const charXRef = useRef(Math.floor((CANVAS_SIZE - FRAME_W) / 2));
+  const charYOffsetRef = useRef(0); // bounce offset
+  const facingLeftRef = useRef(false);
+  const walkFrameRef = useRef(0);
+  const isWalkingRef = useRef(false);
+
   const [selected, setSelected] = useState<number | null>(null);
   const [showStats, setShowStats] = useState(false);
   const [blinkOn, setBlinkOn] = useState(true);
+  const [showReset, setShowReset] = useState(false);
 
-  const { state, loading, feed, play, cleanPoop, heal } = useTamagotchi();
+  const { state, loading, feed, play, cleanPoop, heal, resetStats } =
+    useTamagotchi();
 
   // Blink timer for critical stats
   useEffect(() => {
@@ -82,11 +118,13 @@ export default function TamagotchiPage() {
     if (mood !== moodRef.current) {
       moodRef.current = mood;
       framesRef.current = MOOD_FRAMES[mood];
+      intervalRef.current = MOOD_INTERVALS[mood];
       frameRef.current = 0;
     }
     poopRef.current = state.poop;
   }, [state]);
 
+  // ── Draw function ──
   const draw = useCallback(() => {
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
@@ -100,18 +138,35 @@ export default function TamagotchiPage() {
       );
     }
 
-    // Draw character frame centered on canvas
-    const frames = framesRef.current;
+    // Determine which frames to use
+    const walking = isWalkingRef.current;
+    const frames = walking ? FRAMES_WALK : framesRef.current;
+    const fi = walking ? walkFrameRef.current : frameRef.current;
+
     if (charImgRef.current && frames.length > 0) {
-      const sx = frames[frameRef.current % frames.length] * FRAME_W;
+      const sx = frames[fi % frames.length] * FRAME_W;
       const sy = CHAR_ROW_Y;
-      const dx = Math.floor((CANVAS_SIZE - FRAME_W) / 2);
-      const dy = CANVAS_SIZE - FRAME_H - 4;
-      ctx.drawImage(
-        charImgRef.current,
-        sx, sy, FRAME_W, FRAME_H,
-        dx, dy, FRAME_W, FRAME_H
-      );
+      const dx = charXRef.current;
+      const dy = CANVAS_SIZE - FRAME_H - 4 + charYOffsetRef.current;
+
+      ctx.save();
+      if (facingLeftRef.current) {
+        // Flip horizontally
+        ctx.translate(dx + FRAME_W, dy);
+        ctx.scale(-1, 1);
+        ctx.drawImage(
+          charImgRef.current,
+          sx, sy, FRAME_W, FRAME_H,
+          0, 0, FRAME_W, FRAME_H
+        );
+      } else {
+        ctx.drawImage(
+          charImgRef.current,
+          sx, sy, FRAME_W, FRAME_H,
+          dx, dy, FRAME_W, FRAME_H
+        );
+      }
+      ctx.restore();
     }
 
     // Draw poop icons at bottom-right
@@ -124,6 +179,64 @@ export default function TamagotchiPage() {
     }
   }, []);
 
+  // ── AI state machine tick (runs every ~150ms) ──
+  const aiTick = useCallback(() => {
+    const st = aiStateRef.current;
+
+    if (st === "wait") {
+      aiTimerRef.current -= 150;
+      if (aiTimerRef.current <= 0) {
+        aiStateRef.current = "decide";
+      }
+    } else if (st === "decide") {
+      const r = Math.random();
+      if (r < 0.6) {
+        // idle: stay in place 2~4s
+        aiStateRef.current = "wait";
+        aiTimerRef.current = 2000 + Math.random() * 2000;
+        isWalkingRef.current = false;
+      } else if (r < 0.8) {
+        aiStateRef.current = "walkLeft";
+        aiTimerRef.current = 1500 + Math.random() * 2000;
+        isWalkingRef.current = true;
+        facingLeftRef.current = true;
+      } else {
+        aiStateRef.current = "walkRight";
+        aiTimerRef.current = 1500 + Math.random() * 2000;
+        isWalkingRef.current = true;
+        facingLeftRef.current = false;
+      }
+    } else if (st === "walkLeft" || st === "walkRight") {
+      aiTimerRef.current -= 150;
+      const dir = st === "walkLeft" ? -WALK_SPEED : WALK_SPEED;
+      charXRef.current += dir;
+
+      // Bounce: 1px up/down
+      charYOffsetRef.current = charYOffsetRef.current === 0 ? -1 : 0;
+
+      // Boundary check
+      if (charXRef.current <= CHAR_MIN_X) {
+        charXRef.current = CHAR_MIN_X;
+        aiStateRef.current = "walkRight";
+        facingLeftRef.current = false;
+        aiTimerRef.current = 1000 + Math.random() * 1500;
+      } else if (charXRef.current >= CHAR_MAX_X) {
+        charXRef.current = CHAR_MAX_X;
+        aiStateRef.current = "walkLeft";
+        facingLeftRef.current = true;
+        aiTimerRef.current = 1000 + Math.random() * 1500;
+      }
+
+      if (aiTimerRef.current <= 0) {
+        aiStateRef.current = "wait";
+        aiTimerRef.current = 2000 + Math.random() * 2000;
+        isWalkingRef.current = false;
+        charYOffsetRef.current = 0;
+      }
+    }
+  }, []);
+
+  // ── Main animation loop ──
   useEffect(() => {
     const bgImg = new Image();
     bgImg.src = "/tamagotchi/sprites/Backgrounds - Sanrio.png";
@@ -139,16 +252,41 @@ export default function TamagotchiPage() {
       draw();
     };
 
-    const interval = setInterval(() => {
-      const frames = framesRef.current;
-      if (frames.length > 0) {
-        frameRef.current = (frameRef.current + 1) % frames.length;
-        draw();
-      }
-    }, FRAME_INTERVAL);
+    // Initialize AI
+    aiStateRef.current = "wait";
+    aiTimerRef.current = 2000 + Math.random() * 2000;
+    charXRef.current = Math.floor((CANVAS_SIZE - FRAME_W) / 2);
 
-    return () => clearInterval(interval);
-  }, [draw]);
+    // AI tick at 150ms
+    const aiInterval = setInterval(() => {
+      aiTick();
+      // Advance walk frame
+      if (isWalkingRef.current) {
+        walkFrameRef.current = (walkFrameRef.current + 1) % FRAMES_WALK.length;
+      }
+      draw();
+    }, 150);
+
+    // Mood animation at variable interval
+    let lastInterval = intervalRef.current;
+    function scheduleMoodFrame() {
+      animTimerRef.current = setTimeout(() => {
+        const frames = framesRef.current;
+        if (frames.length > 0 && !isWalkingRef.current) {
+          frameRef.current = (frameRef.current + 1) % frames.length;
+        }
+        draw();
+        lastInterval = intervalRef.current;
+        scheduleMoodFrame();
+      }, lastInterval);
+    }
+    scheduleMoodFrame();
+
+    return () => {
+      clearInterval(aiInterval);
+      if (animTimerRef.current) clearTimeout(animTimerRef.current);
+    };
+  }, [draw, aiTick]);
 
   const handleTap = (index: number) => {
     if (selected === index) {
@@ -159,7 +297,9 @@ export default function TamagotchiPage() {
         case 4: cleanPoop(); break;
         case 5: setShowStats(true); break;
         default:
-          console.log(`[Tamagotchi] ${MENU_ITEMS[index].icon} ${MENU_ITEMS[index].label} — 미구현`);
+          console.log(
+            `[Tamagotchi] ${MENU_ITEMS[index].icon} ${MENU_ITEMS[index].label} — 미구현`
+          );
       }
       setSelected(null);
     } else {
@@ -246,10 +386,9 @@ export default function TamagotchiPage() {
       {/* Bottom menu */}
       <div className="flex w-full max-w-md justify-around py-2 bg-black/80 backdrop-blur-sm">
         {MENU_ITEMS.map((item, i) => {
-          // Disable logic
           const disabled =
-            (i === 3 && (!state || !state.sick)) ||    // 약: sick일 때만
-            (i === 4 && (!state || state.poop <= 0));   // 화장실: poop≥1일 때만
+            (i === 3 && (!state || !state.sick)) ||
+            (i === 4 && (!state || state.poop <= 0));
 
           return (
             <button
@@ -312,7 +451,9 @@ export default function TamagotchiPage() {
               </div>
               <div className="flex justify-between">
                 <span>📅 나이</span>
-                <span>{state.age}일 ({getStage(state.age)})</span>
+                <span>
+                  {state.age}일 ({getStage(state.age)})
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>⚠️ 케어미스</span>
@@ -322,6 +463,28 @@ export default function TamagotchiPage() {
                 <span>🎮 오늘 놀이</span>
                 <span>{state.play_count_today}/4</span>
               </div>
+            </div>
+            {/* Dev reset button */}
+            <div className="pt-2 border-t border-gray-700 space-y-2">
+              {!showReset ? (
+                <button
+                  onClick={() => setShowReset(true)}
+                  className="w-full py-1.5 rounded-lg bg-gray-800 text-gray-500 text-[10px]"
+                >
+                  개발자 옵션
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    resetStats();
+                    setShowReset(false);
+                    setShowStats(false);
+                  }}
+                  className="w-full py-1.5 rounded-lg bg-red-900/60 text-red-300 text-xs"
+                >
+                  🔄 수치 리셋 (hunger=4, happy=8)
+                </button>
+              )}
             </div>
             <button
               onClick={() => setShowStats(false)}

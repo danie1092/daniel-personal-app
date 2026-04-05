@@ -23,9 +23,9 @@ export interface TamagotchiState {
   sick: boolean;
 }
 
-const HUNGER_DECAY_MS = 2 * 60 * 60 * 1000; // 2시간
-const HAPPY_DECAY_MS = 1 * 60 * 60 * 1000;  // 1시간
-const CARE_MISS_MS = 30 * 60 * 1000;         // 30분
+const HUNGER_DECAY_MS = 2 * 60 * 60 * 1000; // 2h
+const HAPPY_DECAY_MS = 1 * 60 * 60 * 1000;  // 1h
+const CARE_MISS_MS = 30 * 60 * 1000;         // 30min
 
 const MAX_HUNGER = 4;
 const MAX_HAPPY = 8;
@@ -34,6 +34,29 @@ const MAX_PLAY_PER_DAY = 4;
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// ── accurateInterval: drift-free timer (from elisavetTriant) ──
+function accurateInterval(callback: () => void, time: number) {
+  let nextAt = Date.now() + time;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let cancelled = false;
+
+  function tick() {
+    if (cancelled) return;
+    callback();
+    nextAt += time;
+    const delay = Math.max(0, nextAt - Date.now());
+    timer = setTimeout(tick, delay);
+  }
+
+  timer = setTimeout(tick, time);
+  return {
+    cancel() {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    },
+  };
 }
 
 function applyDecay(state: TamagotchiState): TamagotchiState {
@@ -46,7 +69,7 @@ function applyDecay(state: TamagotchiState): TamagotchiState {
     s.play_count_date = todayStr();
   }
 
-  // Hunger decay: -1 per 2 hours since last_fed (2x if sick)
+  // Hunger decay: -1 per 2h since last_fed (2x if sick)
   const hungerInterval = s.sick ? HUNGER_DECAY_MS / 2 : HUNGER_DECAY_MS;
   const fedElapsed = now - new Date(s.last_fed).getTime();
   const hungerTicks = Math.floor(fedElapsed / hungerInterval);
@@ -70,7 +93,7 @@ function applyDecay(state: TamagotchiState): TamagotchiState {
     }
   }
 
-  // Happy decay: -1 per 1 hour since last_played
+  // Happy decay: -1 per 1h since last_played
   const playedElapsed = now - new Date(s.last_played).getTime();
   const happyTicks = Math.floor(playedElapsed / HAPPY_DECAY_MS);
   if (happyTicks > 0) {
@@ -130,6 +153,8 @@ export function useTamagotchi() {
   const [loading, setLoading] = useState(true);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const actionLock = useRef(false);
+  const hungerTimer = useRef<{ cancel: () => void } | null>(null);
+  const happyTimer = useRef<{ cancel: () => void } | null>(null);
 
   const save = useCallback(async (s: TamagotchiState) => {
     const { id, ...rest } = s;
@@ -166,6 +191,51 @@ export function useTamagotchi() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Live decay timers (accurateInterval) ──
+  useEffect(() => {
+    if (!state) return;
+
+    // Hunger: -1 every 2h (1h if sick)
+    const hungerMs = state.sick ? HUNGER_DECAY_MS / 2 : HUNGER_DECAY_MS;
+    hungerTimer.current = accurateInterval(() => {
+      setState((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev };
+        next.hunger = Math.max(0, next.hunger - 1);
+        next.last_fed = new Date().toISOString();
+        // Poop chance
+        if (next.poop < MAX_POOP) {
+          const chance = next.hunger >= 3 ? 0.3 : 0.15;
+          if (Math.random() < chance) next.poop = Math.min(MAX_POOP, next.poop + 1);
+        }
+        if (next.poop >= MAX_POOP && !next.sick && Math.random() < 0.1) {
+          next.sick = true;
+        }
+        debouncedSave(next);
+        return next;
+      });
+    }, hungerMs);
+
+    // Happy: -1 every 1h
+    happyTimer.current = accurateInterval(() => {
+      setState((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev };
+        next.happy = Math.max(0, next.happy - 1);
+        next.last_played = new Date().toISOString();
+        debouncedSave(next);
+        return next;
+      });
+    }, HAPPY_DECAY_MS);
+
+    return () => {
+      hungerTimer.current?.cancel();
+      happyTimer.current?.cancel();
+    };
+    // Only restart timers when sick status changes (affects hunger rate)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.sick]);
 
   // Check app bonuses (routine & diary)
   useEffect(() => {
@@ -271,5 +341,26 @@ export function useTamagotchi() {
     });
   }, [debouncedSave]);
 
-  return { state, loading, feed, play, cleanPoop, heal };
+  const resetStats = useCallback(() => {
+    setState((prev) => {
+      if (!prev) return prev;
+      const now = new Date().toISOString();
+      const next: TamagotchiState = {
+        ...prev,
+        hunger: MAX_HUNGER,
+        happy: MAX_HAPPY,
+        poop: 0,
+        sick: false,
+        care_mistakes: 0,
+        last_fed: now,
+        last_played: now,
+        last_hunger_zero: null,
+        last_happy_zero: null,
+      };
+      save(next);
+      return next;
+    });
+  }, [save]);
+
+  return { state, loading, feed, play, cleanPoop, heal, resetStats };
 }
