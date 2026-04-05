@@ -57,8 +57,9 @@ const MOOD_INTERVALS: Record<Mood, number> = {
 type AIState = "wait" | "decide" | "walkLeft" | "walkRight" | "idle";
 
 const WALK_SPEED = 1; // px per tick
-const CHAR_MIN_X = 8;
-const CHAR_MAX_X = CANVAS_SIZE - FRAME_W - 8;
+// charXRef stores CENTER x position
+const CHAR_MIN_X = FRAME_W / 2 + 8;
+const CHAR_MAX_X = CANVAS_SIZE - FRAME_W / 2 - 8;
 
 const MENU_ITEMS = [
   { icon: "🍚", label: "밥" },
@@ -93,7 +94,7 @@ export default function TamagotchiPage() {
   // AI state machine refs
   const aiStateRef = useRef<AIState>("wait");
   const aiTimerRef = useRef(0);
-  const charXRef = useRef(Math.floor((CANVAS_SIZE - FRAME_W) / 2));
+  const charXRef = useRef(Math.floor(CANVAS_SIZE / 2));
   const charYOffsetRef = useRef(0); // bounce offset
   const facingLeftRef = useRef(false);
   const isWalkingRef = useRef(false);
@@ -170,23 +171,23 @@ export default function TamagotchiPage() {
       } else {
         const frameIdx = frames[fi % frames.length];
         const sx = frameIdx * FRAME_W;
-        const dx = charXRef.current;
+        const destX = charXRef.current - FRAME_W / 2;
         const bodyBottom = CANVAS_SIZE - 4 + charYOffsetRef.current;
         const bodyDY = bodyBottom - BODY_SH;
-        const eyeDY = bodyBottom - BODY_SH - EYE_SH;  // eyes stacked above body
-        const accDY = bodyBottom - BODY_SH - ACC_SH;   // accessory stacked above body
+        const eyeDY = bodyBottom - BODY_SH - EYE_SH;
+        const accDY = bodyBottom - BODY_SH - ACC_SH;
 
         ctx.save();
         if (facingLeftRef.current) {
-          ctx.translate(dx + FRAME_W, 0);
+          ctx.translate(destX + FRAME_W, 0);
           ctx.scale(-1, 1);
           ctx.drawImage(img, sx, BODY_SY, FRAME_W, BODY_SH, 0, bodyDY, FRAME_W, BODY_SH);
           ctx.drawImage(img, sx, ACC_SY,  FRAME_W, ACC_SH,  0, accDY,  FRAME_W, ACC_SH);
           ctx.drawImage(img, sx, EYE_SY,  FRAME_W, EYE_SH,  0, eyeDY,  FRAME_W, EYE_SH);
         } else {
-          ctx.drawImage(img, sx, BODY_SY, FRAME_W, BODY_SH, dx, bodyDY, FRAME_W, BODY_SH);
-          ctx.drawImage(img, sx, ACC_SY,  FRAME_W, ACC_SH,  dx, accDY,  FRAME_W, ACC_SH);
-          ctx.drawImage(img, sx, EYE_SY,  FRAME_W, EYE_SH,  dx, eyeDY,  FRAME_W, EYE_SH);
+          ctx.drawImage(img, sx, BODY_SY, FRAME_W, BODY_SH, destX, bodyDY, FRAME_W, BODY_SH);
+          ctx.drawImage(img, sx, ACC_SY,  FRAME_W, ACC_SH,  destX, accDY,  FRAME_W, ACC_SH);
+          ctx.drawImage(img, sx, EYE_SY,  FRAME_W, EYE_SH,  destX, eyeDY,  FRAME_W, EYE_SH);
         }
         ctx.restore();
       }
@@ -278,7 +279,7 @@ export default function TamagotchiPage() {
     // Initialize AI
     aiStateRef.current = "wait";
     aiTimerRef.current = 2000 + Math.random() * 2000;
-    charXRef.current = Math.floor((CANVAS_SIZE - FRAME_W) / 2);
+    charXRef.current = Math.floor(CANVAS_SIZE / 2);
 
     // AI tick at 150ms
     const aiInterval = setInterval(() => {
