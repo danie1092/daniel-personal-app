@@ -4,8 +4,6 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useTamagotchi } from "@/hooks/useTamagotchi";
 
 const CANVAS_SIZE = 128;
-const DEBUG_MODE = false;
-
 // Kiraritchi sprite: 800×174, frame width=40, scale=1
 const FRAME_W = 40;
 // 3 layers with source-relative Y offsets (anchor = body at sy=30)
@@ -146,51 +144,27 @@ export default function TamagotchiPage() {
 
     if (charImgRef.current && frames.length > 0) {
       const img = charImgRef.current;
+      const frameIdx = frames[fi % frames.length];
+      const sx = frameIdx * FRAME_W;
+      const destX = charXRef.current - FRAME_W / 2;
+      const bodyBottom = CANVAS_SIZE - 4 + charYOffsetRef.current;
+      const bodyDY = bodyBottom - BODY_SH;
+      const eyeDY = bodyBottom - BODY_SH - EYE_SH;
+      const accDY = bodyBottom - BODY_SH - ACC_SH;
 
-      if (DEBUG_MODE) {
-        // Debug: frame 0 fixed, layers side by side
-        const sx = 0; // frameIndex=0
-        const layers = [
-          { name: 'body',      sy: BODY_SY, sh: BODY_SH, dx: 10,  dy: 40, color: 'red' },
-          { name: 'eyes',      sy: EYE_SY,  sh: EYE_SH,  dx: 60,  dy: 40, color: 'blue' },
-          { name: 'accessory', sy: ACC_SY,   sh: ACC_SH,  dx: 110, dy: 40, color: 'lime' },
-        ];
-        for (const l of layers) {
-          console.log(`${l.name}: src(${sx}, ${l.sy}, ${FRAME_W}, ${l.sh}) -> dest(${l.dx}, ${l.dy}, ${FRAME_W}, ${l.sh})`);
-          ctx.drawImage(img, sx, l.sy, FRAME_W, l.sh, l.dx, l.dy, FRAME_W, l.sh);
-          ctx.strokeStyle = l.color;
-          ctx.lineWidth = 1;
-          ctx.strokeRect(l.dx, l.dy, FRAME_W, l.sh);
-        }
-        // Label
-        ctx.fillStyle = 'white';
-        ctx.font = '6px monospace';
-        ctx.fillText('BODY', 10, 38);
-        ctx.fillText('EYES', 60, 38);
-        ctx.fillText('ACC', 110, 38);
+      ctx.save();
+      if (facingLeftRef.current) {
+        ctx.translate(destX + FRAME_W, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, sx, BODY_SY, FRAME_W, BODY_SH, 0, bodyDY, FRAME_W, BODY_SH);
+        ctx.drawImage(img, sx, ACC_SY,  FRAME_W, ACC_SH,  0, accDY,  FRAME_W, ACC_SH);
+        ctx.drawImage(img, sx, EYE_SY,  FRAME_W, EYE_SH,  0, eyeDY,  FRAME_W, EYE_SH);
       } else {
-        const frameIdx = frames[fi % frames.length];
-        const sx = frameIdx * FRAME_W;
-        const destX = charXRef.current - FRAME_W / 2;
-        const bodyBottom = CANVAS_SIZE - 4 + charYOffsetRef.current;
-        const bodyDY = bodyBottom - BODY_SH;
-        const eyeDY = bodyBottom - BODY_SH - EYE_SH;
-        const accDY = bodyBottom - BODY_SH - ACC_SH;
-
-        ctx.save();
-        if (facingLeftRef.current) {
-          ctx.translate(destX + FRAME_W, 0);
-          ctx.scale(-1, 1);
-          ctx.drawImage(img, sx, BODY_SY, FRAME_W, BODY_SH, 0, bodyDY, FRAME_W, BODY_SH);
-          ctx.drawImage(img, sx, ACC_SY,  FRAME_W, ACC_SH,  0, accDY,  FRAME_W, ACC_SH);
-          ctx.drawImage(img, sx, EYE_SY,  FRAME_W, EYE_SH,  0, eyeDY,  FRAME_W, EYE_SH);
-        } else {
-          ctx.drawImage(img, sx, BODY_SY, FRAME_W, BODY_SH, destX, bodyDY, FRAME_W, BODY_SH);
-          ctx.drawImage(img, sx, ACC_SY,  FRAME_W, ACC_SH,  destX, accDY,  FRAME_W, ACC_SH);
-          ctx.drawImage(img, sx, EYE_SY,  FRAME_W, EYE_SH,  destX, eyeDY,  FRAME_W, EYE_SH);
-        }
-        ctx.restore();
+        ctx.drawImage(img, sx, BODY_SY, FRAME_W, BODY_SH, destX, bodyDY, FRAME_W, BODY_SH);
+        ctx.drawImage(img, sx, ACC_SY,  FRAME_W, ACC_SH,  destX, accDY,  FRAME_W, ACC_SH);
+        ctx.drawImage(img, sx, EYE_SY,  FRAME_W, EYE_SH,  destX, eyeDY,  FRAME_W, EYE_SH);
       }
+      ctx.restore();
     }
 
     // Draw poop icons at bottom-right
