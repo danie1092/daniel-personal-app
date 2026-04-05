@@ -5,15 +5,19 @@ import { useTamagotchi } from "@/hooks/useTamagotchi";
 
 const CANVAS_SIZE = 128;
 const FRAME_W = 40;
-const FRAME_H = 86;
+
+// Sprite sheet: 800×174, 2 rows
+// Row 1 (y=0):  eye/face overlay, h=30
+// Row 2 (y=30): body, h=86
+const EYE_ROW_Y = 0;
+const EYE_H = 30;
+const BODY_ROW_Y = 30;
+const BODY_H = 86;
 
 // Background tile: 4th tile in Backgrounds - Sanrio.png
 const BG_TILE_X = 391;
 const BG_TILE_Y = 1;
 const BG_TILE_SIZE = 128;
-
-// Kiraritchi row (sourceY=0, full height from top including headpiece)
-const CHAR_ROW_Y = 0;
 
 // ── Frame sets & intervals per mood ──
 const FRAMES_IDLE = [13, 14, 15, 16];
@@ -139,25 +143,40 @@ export default function TamagotchiPage() {
 
     if (charImgRef.current && frames.length > 0) {
       const sx = frames[fi % frames.length] * FRAME_W;
-      const sy = CHAR_ROW_Y;
       const dx = charXRef.current;
-      const dy = CANVAS_SIZE - FRAME_H - 4 + charYOffsetRef.current;
+      // Body: feet at ground level
+      const bodyDy = CANVAS_SIZE - BODY_H - 4 + charYOffsetRef.current;
+      // Eyes: overlay on top of body head area (same destY as body top)
+      const eyeDy = bodyDy;
 
       ctx.save();
       if (facingLeftRef.current) {
-        // Flip horizontally
-        ctx.translate(dx + FRAME_W, dy);
+        ctx.translate(dx + FRAME_W, 0);
         ctx.scale(-1, 1);
+        // Draw body layer
         ctx.drawImage(
           charImgRef.current,
-          sx, sy, FRAME_W, FRAME_H,
-          0, 0, FRAME_W, FRAME_H
+          sx, BODY_ROW_Y, FRAME_W, BODY_H,
+          0, bodyDy, FRAME_W, BODY_H
+        );
+        // Draw eye overlay on top
+        ctx.drawImage(
+          charImgRef.current,
+          sx, EYE_ROW_Y, FRAME_W, EYE_H,
+          0, eyeDy, FRAME_W, EYE_H
         );
       } else {
+        // Draw body layer
         ctx.drawImage(
           charImgRef.current,
-          sx, sy, FRAME_W, FRAME_H,
-          dx, dy, FRAME_W, FRAME_H
+          sx, BODY_ROW_Y, FRAME_W, BODY_H,
+          dx, bodyDy, FRAME_W, BODY_H
+        );
+        // Draw eye overlay on top
+        ctx.drawImage(
+          charImgRef.current,
+          sx, EYE_ROW_Y, FRAME_W, EYE_H,
+          dx, eyeDy, FRAME_W, EYE_H
         );
       }
       ctx.restore();
