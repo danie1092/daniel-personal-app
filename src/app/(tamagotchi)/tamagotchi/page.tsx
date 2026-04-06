@@ -187,19 +187,21 @@ export default function TamagotchiPage() {
       const eyesImg = imgs[`eyes${frame.eyes}`];
       const hairImg = imgs[`hair${frame.hair}`];
 
-      ctx.save();
       if (facingLeftRef.current) {
+        // Flip body + hair
+        ctx.save();
         ctx.translate(destX + SPRITE_SIZE, destY);
         ctx.scale(-1, 1);
         if (bodyImg) ctx.drawImage(bodyImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, 0, 0, SPRITE_SIZE, SPRITE_SIZE);
         if (hairImg) ctx.drawImage(hairImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, 0, 0, SPRITE_SIZE, SPRITE_SIZE);
-        if (eyesImg) ctx.drawImage(eyesImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, 0, 0, SPRITE_SIZE, SPRITE_SIZE);
+        ctx.restore();
+        // Eyes: no flip, same destXY as body
+        if (eyesImg) ctx.drawImage(eyesImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, destX, destY, SPRITE_SIZE, SPRITE_SIZE);
       } else {
         if (bodyImg) ctx.drawImage(bodyImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, destX, destY, SPRITE_SIZE, SPRITE_SIZE);
         if (hairImg) ctx.drawImage(hairImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, destX, destY, SPRITE_SIZE, SPRITE_SIZE);
         if (eyesImg) ctx.drawImage(eyesImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, destX, destY, SPRITE_SIZE, SPRITE_SIZE);
       }
-      ctx.restore();
     }
 
     // Poop icons
