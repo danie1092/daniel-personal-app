@@ -187,6 +187,7 @@ export default function TamagotchiPage() {
       const eyesImg = imgs[`eyes${frame.eyes}`];
       const hairImg = imgs[`hair${frame.hair}`];
 
+      const EYE_OFFSET = 3;
       if (facingLeftRef.current) {
         // Flip body + hair
         ctx.save();
@@ -195,12 +196,12 @@ export default function TamagotchiPage() {
         if (bodyImg) ctx.drawImage(bodyImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, 0, 0, SPRITE_SIZE, SPRITE_SIZE);
         if (hairImg) ctx.drawImage(hairImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, 0, 0, SPRITE_SIZE, SPRITE_SIZE);
         ctx.restore();
-        // Eyes: no flip, same destXY as body
-        if (eyesImg) ctx.drawImage(eyesImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, destX, destY, SPRITE_SIZE, SPRITE_SIZE);
+        // Eyes + hair offset for facing left
+        if (eyesImg) ctx.drawImage(eyesImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, destX - EYE_OFFSET, destY, SPRITE_SIZE, SPRITE_SIZE);
       } else {
         if (bodyImg) ctx.drawImage(bodyImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, destX, destY, SPRITE_SIZE, SPRITE_SIZE);
         if (hairImg) ctx.drawImage(hairImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, destX, destY, SPRITE_SIZE, SPRITE_SIZE);
-        if (eyesImg) ctx.drawImage(eyesImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, destX, destY, SPRITE_SIZE, SPRITE_SIZE);
+        if (eyesImg) ctx.drawImage(eyesImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, destX + EYE_OFFSET, destY, SPRITE_SIZE, SPRITE_SIZE);
       }
     }
 
