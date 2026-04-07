@@ -196,8 +196,14 @@ export default function TamagotchiPage() {
         if (bodyImg) ctx.drawImage(bodyImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, 0, 0, SPRITE_SIZE, SPRITE_SIZE);
         if (hairImg) ctx.drawImage(hairImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, 0, 0, SPRITE_SIZE, SPRITE_SIZE);
         ctx.restore();
-        // Eyes + hair offset for facing left
-        if (eyesImg) ctx.drawImage(eyesImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, destX + EYE_OFFSET, destY, SPRITE_SIZE, SPRITE_SIZE);
+        // Eyes: also flip horizontally
+        if (eyesImg) {
+          ctx.save();
+          ctx.translate(destX + SPRITE_SIZE, destY);
+          ctx.scale(-1, 1);
+          ctx.drawImage(eyesImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, 0, 0, SPRITE_SIZE, SPRITE_SIZE);
+          ctx.restore();
+        }
       } else {
         if (bodyImg) ctx.drawImage(bodyImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, destX, destY, SPRITE_SIZE, SPRITE_SIZE);
         if (hairImg) ctx.drawImage(hairImg, 0, 0, SPRITE_SIZE, SPRITE_SIZE, destX, destY, SPRITE_SIZE, SPRITE_SIZE);
