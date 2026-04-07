@@ -157,7 +157,7 @@ export default function BudgetPage() {
         setClipText(null);
       }
     })();
-  }, [activeTab]);
+  }, []);
 
   useEffect(() => {
     if (activeTab === "월급" || activeTab === "월별요약") {
