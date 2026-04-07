@@ -99,6 +99,10 @@ export default function BudgetPage() {
   const [fixedLoading, setFixedLoading] = useState(false);
   const [fixedResult, setFixedResult] = useState<string | null>(null);
 
+  // 클립보드 카드 문자 감지
+  const [clipText, setClipText] = useState<string | null>(null);
+  const [clipParsing, setClipParsing] = useState(false);
+
   // 월급 탭
   const [salaryForm, setSalaryForm] = useState({ date: todayStr, amount: "" });
   const [salarySaving, setSalarySaving] = useState(false);
@@ -138,6 +142,23 @@ export default function BudgetPage() {
 
   useEffect(() => { fetchToday(); }, [fetchToday]);
 
+  // 입력 탭 진입 시 클립보드 감지
+  useEffect(() => {
+    if (activeTab !== "입력") return;
+    (async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        const isCard =
+          (text.includes("현대카드") || text.includes("우리카드") || text.includes("승인")) &&
+          text.includes("원");
+        setClipText(isCard ? text : null);
+      } catch {
+        // 권한 없으면 조용히 무시
+        setClipText(null);
+      }
+    })();
+  }, [activeTab]);
+
   useEffect(() => {
     if (activeTab === "월급" || activeTab === "월별요약") {
       fetchMonthly(summaryYear, summaryMonth);
@@ -165,6 +186,35 @@ export default function BudgetPage() {
       await fetchToday();
     }
     setSaving(false);
+  }
+
+  async function handleClipParse() {
+    if (!clipText) return;
+    setClipParsing(true);
+    try {
+      const res = await fetch("/api/budget/auto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ raw_text: clipText }),
+      });
+      const json = await res.json();
+      if (json.ok && json.entry) {
+        const e = json.entry;
+        const method = PAYMENT_METHODS.includes(e.payment_method as typeof PAYMENT_METHODS[number])
+          ? (e.payment_method as typeof PAYMENT_METHODS[number])
+          : PAYMENT_METHODS[0];
+        setForm((prev) => ({
+          ...prev,
+          amount: String(e.amount),
+          memo: e.memo ?? "",
+          date: e.date ?? prev.date,
+          paymentMethod: method,
+        }));
+        setClipText(null); // 배너 숨김
+      }
+    } finally {
+      setClipParsing(false);
+    }
   }
 
   async function handleFixedExpenses() {
@@ -257,6 +307,23 @@ export default function BudgetPage() {
         {/* ── 입력 탭 ── */}
         {activeTab === "입력" && (
           <>
+            {/* 클립보드 카드 문자 감지 배너 */}
+            {clipText && (
+              <button
+                type="button"
+                onClick={handleClipParse}
+                disabled={clipParsing}
+                className="w-full flex items-center gap-2.5 px-4 py-3 text-left active:opacity-70 disabled:opacity-50"
+                style={{ background: "linear-gradient(90deg, #d1fae5, #a7f3d0)" }}
+              >
+                <span className="text-base">💳</span>
+                <span className="text-sm font-medium text-emerald-800 flex-1">
+                  {clipParsing ? "파싱 중..." : "카드 결제 문자 감지됨 → 탭하여 입력"}
+                </span>
+                <span className="text-emerald-500 text-lg">›</span>
+              </button>
+            )}
+
             {/* 고정지출 불러오기 */}
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-gray-50">
               <span className="text-xs text-gray-400">
