@@ -187,7 +187,7 @@ export default function TamagotchiPage() {
       const eyesImg = imgs[`eyes${frame.eyes}`];
       const hairImg = imgs[`hair${frame.hair}`];
 
-      const EYE_OFFSET = 5;
+      const EYE_OFFSET = 0;
       if (facingLeftRef.current) {
         // Flip body + hair
         ctx.save();
