@@ -142,22 +142,7 @@ export default function BudgetPage() {
 
   useEffect(() => { fetchToday(); }, [fetchToday]);
 
-  // 입력 탭 진입 시 클립보드 감지
-  useEffect(() => {
-    if (activeTab !== "입력") return;
-    (async () => {
-      try {
-        const text = await navigator.clipboard.readText();
-        const isCard =
-          (text.includes("현대카드") || text.includes("우리카드") || text.includes("승인")) &&
-          text.includes("원");
-        setClipText(isCard ? text : null);
-      } catch {
-        // 권한 없으면 조용히 무시
-        setClipText(null);
-      }
-    })();
-  }, []);
+
 
   useEffect(() => {
     if (activeTab === "월급" || activeTab === "월별요약") {
