@@ -406,6 +406,14 @@ export default function BudgetPage() {
                     </span>
                     <span className="text-xs text-gray-400">{entry.payment_method}</span>
                     <span className="text-sm font-medium">{entry.amount.toLocaleString()}원</span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await supabase.from("budget_entries").delete().eq("id", entry.id);
+                        await fetchToday();
+                      }}
+                      className="text-gray-300 active:text-red-400 text-base pl-1"
+                    >✕</button>
                   </div>
                 ))}
                 <div className="flex justify-between items-center px-4 py-2.5 bg-gray-50">
