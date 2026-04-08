@@ -188,14 +188,15 @@ export default function BudgetPage() {
     setSaving(false);
   }
 
-  async function handleClipParse() {
-    if (!clipText) return;
+  async function handleClipParse(textOverride?: string) {
+    const raw = textOverride ?? clipText;
+    if (!raw) return;
     setClipParsing(true);
     try {
       const res = await fetch("/api/budget/auto", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ raw_text: clipText }),
+        body: JSON.stringify({ raw_text: raw }),
       });
       const json = await res.json();
       if (json.ok && json.entry) {
@@ -307,22 +308,27 @@ export default function BudgetPage() {
         {/* ── 입력 탭 ── */}
         {activeTab === "입력" && (
           <>
-            {/* 클립보드 카드 문자 감지 배너 */}
-            {clipText && (
-              <button
-                type="button"
-                onClick={handleClipParse}
-                disabled={clipParsing}
-                className="w-full flex items-center gap-2.5 px-4 py-3 text-left active:opacity-70 disabled:opacity-50"
-                style={{ background: "linear-gradient(90deg, #d1fae5, #a7f3d0)" }}
-              >
-                <span className="text-base">💳</span>
-                <span className="text-sm font-medium text-emerald-800 flex-1">
-                  {clipParsing ? "파싱 중..." : "카드 결제 문자 감지됨 → 탭하여 입력"}
-                </span>
-                <span className="text-emerald-500 text-lg">›</span>
-              </button>
-            )}
+            {/* 클립보드 불러오기 버튼 */}
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const text = await navigator.clipboard.readText();
+                  const isCard = (text.includes("현대카드") || text.includes("우리카드") || text.includes("승인")) && text.includes("원");
+                  if (isCard) { await handleClipParse(text); }
+                  else { alert("카드 결제 문자가 클립보드에 없어요"); }
+                } catch { alert("클립보드 접근 권한이 없어요"); }
+              }}
+              disabled={clipParsing}
+              className="w-full flex items-center gap-2.5 px-4 py-3 text-left active:opacity-70 disabled:opacity-50"
+              style={{ background: "linear-gradient(90deg, #d1fae5, #a7f3d0)" }}
+            >
+              <span className="text-base">💳</span>
+              <span className="text-sm font-medium text-emerald-800 flex-1">
+                {clipParsing ? "파싱 중..." : "카드 문자 붙여넣기"}
+              </span>
+              <span className="text-emerald-500 text-lg">›</span>
+            </button>
 
             {/* 고정지출 불러오기 */}
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-gray-50">
