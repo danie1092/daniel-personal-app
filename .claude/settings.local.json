@@ -65,7 +65,10 @@
       "Bash(node -e \"const m = require\\('@supabase/auth-helpers-nextjs'\\); console.log\\(Object.keys\\(m\\)\\)\")",
       "Bash(git -C /Users/danielle/daniel-personal-app add -A)",
       "Bash(git -C /Users/danielle/daniel-personal-app commit -m \"fix: remove empty app dir, fix createServerClient import\")",
-      "Bash(git -C /Users/danielle/daniel-personal-app push origin main)"
+      "Bash(git -C /Users/danielle/daniel-personal-app push origin main)",
+      "Bash(find /Users/danielle/daniel-personal-app/src -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) -exec grep -l \"memo\" {} \\\\;)",
+      "Bash(grep -E \"\\\\.\\(json|js|ts\\)$\")",
+      "Bash(ls -la /Users/danielle/daniel-personal-app/src/app/*.tsx /Users/danielle/daniel-personal-app/src/app/*.ts)"
     ]
   }
 }

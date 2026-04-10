@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { MEMO_TAGS } from "@/lib/constants";
 import { TAG_COLORS } from "@/lib/memoColors";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
+
+const supabase = createClient();
 
 type MemoEntry = {
   id: string;
