@@ -59,7 +59,13 @@
       "Bash(curl -sL \"https://github.com/cli/cli/releases/download/v2.89.0/gh_2.89.0_macOS_arm64.zip\" -o /tmp/gh.zip)",
       "Bash(unzip -o /tmp/gh.zip -d /tmp/gh_extracted)",
       "Bash(export PATH=\"/tmp/gh_extracted/gh_2.89.0_macOS_arm64/bin:$PATH\")",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(vercel --prod --yes)",
+      "Bash(npm install:*)",
+      "Bash(node -e \"const m = require\\('@supabase/auth-helpers-nextjs'\\); console.log\\(Object.keys\\(m\\)\\)\")",
+      "Bash(git -C /Users/danielle/daniel-personal-app add -A)",
+      "Bash(git -C /Users/danielle/daniel-personal-app commit -m \"fix: remove empty app dir, fix createServerClient import\")",
+      "Bash(git -C /Users/danielle/daniel-personal-app push origin main)"
     ]
   }
 }
