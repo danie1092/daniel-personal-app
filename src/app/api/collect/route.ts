@@ -1,20 +1,19 @@
-import { createServerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll: () => cookieStore.getAll() } }
-    )
+    const authHeader = request.headers.get('authorization')
+    const token = authHeader?.replace('Bearer ', '')
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    if (!token || token !== process.env.COLLECT_API_KEY) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
 
     const body = await request.json()
     const { url, memo, source = 'instagram' } = body
@@ -23,10 +22,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 })
     }
 
+    const userId = process.env.DEFAULT_USER_ID!
+
     const { data: existing } = await supabase
       .from('collected_items')
       .select('id')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('url', url)
       .single()
 
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from('collected_items')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         url,
         memo: memo || null,
         source,
