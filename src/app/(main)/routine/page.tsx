@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { playCheckSound } from "@/lib/acSound";
+import RoutineParty from "@/components/RoutineParty";
 
 type Tab = "체크" | "그래프" | "설정";
 
@@ -319,6 +320,13 @@ export default function RoutinePage() {
                 <span className="text-xs text-gray-400">{checkedCount}/{totalCount}</span>
               </div>
             </div>
+
+            {/* 루틴 파티 카드 */}
+            {!itemsLoading && items.length > 0 && (
+              <div className="px-4 pt-3">
+                <RoutineParty items={items} checkedIds={todayChecks} />
+              </div>
+            )}
 
             {itemsLoading ? (
               <p className="text-center text-gray-300 text-xs py-16">불러오는 중...</p>
