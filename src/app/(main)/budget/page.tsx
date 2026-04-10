@@ -551,6 +551,9 @@ export default function BudgetPage() {
                       <p className="text-sm text-gray-800 truncate">
                         {entry.description ?? entry.category}
                       </p>
+                      {entry.memo && (
+                        <p className="text-[11px] text-gray-500 truncate">{entry.memo}</p>
+                      )}
                       <p className="text-[11px] text-gray-400">
                         {entry.date.slice(5)} · {entry.category}
                         {entry.payment_method ? ` · ${entry.payment_method}` : ""}
