@@ -58,7 +58,8 @@
       "Bash(curl -sL \"https://api.github.com/repos/cli/cli/releases/latest\")",
       "Bash(curl -sL \"https://github.com/cli/cli/releases/download/v2.89.0/gh_2.89.0_macOS_arm64.zip\" -o /tmp/gh.zip)",
       "Bash(unzip -o /tmp/gh.zip -d /tmp/gh_extracted)",
-      "Bash(export PATH=\"/tmp/gh_extracted/gh_2.89.0_macOS_arm64/bin:$PATH\")"
+      "Bash(export PATH=\"/tmp/gh_extracted/gh_2.89.0_macOS_arm64/bin:$PATH\")",
+      "Bash(git push:*)"
     ]
   }
 }
