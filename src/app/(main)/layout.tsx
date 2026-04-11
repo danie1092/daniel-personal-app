@@ -33,9 +33,13 @@ export default function RootLayout({
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
         />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+          rel="stylesheet"
+        />
       </head>
       <body className="h-full bg-white text-black antialiased">
-        <main className="max-w-md mx-auto h-full pb-14">{children}</main>
+        <main className="max-w-md mx-auto h-full pb-24">{children}</main>
         <BottomNav />
       </body>
     </html>

@@ -21,7 +21,7 @@ export default function HomePage() {
   const [todayChecks, setTodayChecks] = useState(0);
   const [totalItems, setTotalItems] = useState(0);
   const [monthSpending, setMonthSpending] = useState(0);
-  const [hasDiary, setHasDiary] = useState(false);
+  const [diaryDates, setDiaryDates] = useState<Set<string>>(new Set());
 
   const today = new Date();
   const todayStr = localDateStr(today);
@@ -39,8 +39,9 @@ export default function HomePage() {
           .eq("checked", true),
         supabase
           .from("diary_entries")
-          .select("id", { count: "exact", head: true })
-          .eq("date", todayStr),
+          .select("date")
+          .gte("date", mStart)
+          .lte("date", todayStr),
         supabase
           .from("budget_entries")
           .select("amount")
@@ -51,7 +52,9 @@ export default function HomePage() {
 
       setTotalItems(itemsRes.count ?? 0);
       setTodayChecks(checksRes.count ?? 0);
-      setHasDiary((diaryRes.count ?? 0) > 0);
+      setDiaryDates(
+        new Set((diaryRes.data ?? []).map((d: { date: string }) => d.date))
+      );
       setMonthSpending(
         (budgetRes.data ?? []).reduce((s, b) => s + (b.amount as number), 0),
       );
@@ -112,95 +115,117 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* 달성 텍스트 — 포켓몬 골드 대화창 */}
-        <div
+        {/* 달성 텍스트 */}
+        <p
           style={{
-            backgroundImage: "url(/images/frame002.png)",
-            backgroundSize: "100% 100%",
-            backgroundColor: "transparent",
-            border: "none",
-            outline: "none",
-            padding: "12px 20px",
-            marginTop: 8,
             textAlign: "center",
+            fontSize: 8,
+            fontFamily: "'Press Start 2P', monospace",
+            color: "#5a4a2a",
+            marginTop: 6,
+            lineHeight: "1.8",
           }}
         >
-          <p style={{ fontSize: 9, color: "#1a1a1a", lineHeight: "1.8" }}>
-            {loading
-              ? "..."
-              : routinePct === 0
-                ? "아직 집에 돌아가지 않았다... 루틴을 시작하자!"
-                : routinePct < 50
-                  ? `다니엘은 집을 향해 걷고 있다... (${todayChecks}/${totalItems})`
-                  : routinePct < 100
-                    ? `다니엘의 발걸음이 빨라졌다! (${todayChecks}/${totalItems})`
-                    : "다니엘이 집에 돌아왔다! ★"}
-          </p>
-        </div>
+          {loading
+            ? "..."
+            : routinePct === 0
+              ? "아직 집에 돌아가지 않았다... 루틴을 시작하자!"
+              : routinePct < 50
+                ? `다니엘은 집을 향해 걷고 있다... (${todayChecks}/${totalItems})`
+                : routinePct < 100
+                  ? `다니엘의 발걸음이 빨라졌다! (${todayChecks}/${totalItems})`
+                  : "다니엘이 집에 돌아왔다! ★"}
+        </p>
       </div>
 
       {/* ── 2. 루틴 파티 ───────────────────────────────────────── */}
       <RoutineParty />
 
-      {/* ── 3. 하단 2열 미니 카드 (하늘색) ────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        {/* 변동지출 */}
-        <div
-          style={{
-            background: "#a8d8f0",
-            borderRadius: 0,
-            padding: "16px 18px",
-            border: "3px solid #1a1a1a",
-            boxShadow: "3px 3px 0px #1a1a1a",
-            outline: "2px solid #1a1a1a",
-            outlineOffset: "-5px",
-          }}
-        >
-          <p style={{ fontSize: 7, color: "#1a1a1a", marginBottom: 10 }}>
-            이번달 변동지출
-          </p>
-          {loading ? (
-            <div style={{ height: 24, width: 96, background: "#8ec8e0", borderRadius: 0 }} />
-          ) : (
-            <p style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>
-              ₩{monthSpending.toLocaleString("ko-KR")}
-            </p>
-          )}
-          <p style={{ fontSize: 7, color: "#2a4a5a", marginTop: 6 }}>{month}월 누계</p>
-        </div>
+      <div style={{ borderTop: "1px dashed #d0ccc7" }} />
 
-        {/* 일기 */}
-        <div
-          style={{
-            background: "#a8d8f0",
-            borderRadius: 0,
-            padding: "16px 18px",
-            border: "3px solid #1a1a1a",
-            boxShadow: "3px 3px 0px #1a1a1a",
-            outline: "2px solid #1a1a1a",
-            outlineOffset: "-5px",
-          }}
-        >
-          <p style={{ fontSize: 7, color: "#1a1a1a", marginBottom: 10 }}>
-            오늘 일기
+      {/* ── 3. 변동지출 한 줄 ─────────────────────────────────── */}
+      {!loading && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/rule-book.png"
+            alt="가계부"
+            width={18}
+            height={18}
+            style={{ imageRendering: "pixelated" }}
+          />
+          <p style={{ fontSize: 7, fontFamily: "'Press Start 2P', monospace", color: "#5a4a2a" }}>
+            {month}월 변동지출 ₩{monthSpending.toLocaleString("ko-KR")}
           </p>
-          {loading ? (
-            <div style={{ height: 24, width: 64, background: "#8ec8e0", borderRadius: 0 }} />
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-              <span style={{ fontSize: 20 }}>{hasDiary ? "📖" : "📝"}</span>
-              <span
-                style={{
-                  fontSize: 10,
-                  color: hasDiary ? "#1a5a1a" : "#4a4a4a",
-                }}
-              >
-                {hasDiary ? "작성 완료" : "미작성"}
-              </span>
-            </div>
-          )}
         </div>
-      </div>
+      )}
+
+      <div style={{ borderTop: "1px dashed #d0ccc7" }} />
+
+      {/* ── 4. 일기 잔디 (egg 히트맵) ────────────────────────── */}
+      {!loading && (() => {
+        const year = today.getFullYear();
+        const m = today.getMonth();
+        const daysInMonth = new Date(year, m + 1, 0).getDate();
+        const days = Array.from({ length: daysInMonth }, (_, i) => {
+          const d = new Date(year, m, i + 1);
+          return localDateStr(d);
+        });
+        const todayDate = today.getDate();
+
+        return (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/rule-book.png"
+                alt="일기"
+                width={18}
+                height={18}
+                style={{ imageRendering: "pixelated" }}
+              />
+              <p style={{ fontSize: 7, fontFamily: "'Press Start 2P', monospace", color: "#5a4a2a" }}>
+                {month}월 일기
+              </p>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+              {days.map((dateStr, i) => {
+                const dayNum = i + 1;
+                const isFuture = dayNum > todayDate;
+                const wrote = diaryDates.has(dateStr);
+
+                return (
+                  <div
+                    key={dateStr}
+                    style={{
+                      position: "relative",
+                      width: 24,
+                      height: 24,
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/images/mystery-egg.png"
+                      alt={`${dayNum}일`}
+                      width={24}
+                      height={24}
+                      style={{
+                        imageRendering: "pixelated",
+                        filter: isFuture
+                          ? "grayscale(100%) opacity(0.15)"
+                          : wrote
+                            ? "none"
+                            : "grayscale(100%) opacity(0.35)",
+                        transition: "filter 0.3s",
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
