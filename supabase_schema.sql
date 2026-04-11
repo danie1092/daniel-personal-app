@@ -43,6 +43,9 @@ create table routine_items (
   name text not null,
   emoji text not null default '✅',
   sort_order integer not null default 0,
+  pokemon_id integer,
+  level integer not null default 1,
+  exp integer not null default 0,
   created_at timestamptz default now()
 );
 

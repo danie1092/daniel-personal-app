@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -8,14 +9,14 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "GmarketSans", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
-  font-weight: 300;
+  font-family: 'Press Start 2P', monospace;
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior: none;
 }
 
-/* GmarketSans 굵기 유틸리티 */
+/* Pretendard 굵기 유틸리티 */
 .font-light   { font-weight: 300; }
 .font-medium  { font-weight: 500; }
 
@@ -81,6 +82,11 @@ body {
 @keyframes heartFloat {
   0%   { transform: translateY(0px) scale(0.5); opacity: 1; }
   100% { transform: translateY(-50px) scale(1.2); opacity: 0; }
+}
+
+@keyframes starBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
 }
 
 @keyframes rainbow-glow {

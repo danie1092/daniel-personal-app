@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
+import RoutineParty from "@/components/RoutineParty";
 
 // ── 유틸 ──────────────────────────────────────────────────────────────────────
 function localDateStr(d: Date): string {
@@ -12,29 +14,19 @@ function monthStart(dateStr: string): string {
   return dateStr.slice(0, 7) + "-01";
 }
 
-const DAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
-
-// ── 카드 컴포넌트 ─────────────────────────────────────────────────────────────
-function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`bg-white rounded-2xl border border-gray-100 overflow-hidden ${className}`}>
-      {children}
-    </div>
-  );
-}
-
 // ── 메인 ─────────────────────────────────────────────────────────────────────
 export default function HomePage() {
   const [loading, setLoading] = useState(true);
 
-  const [todayChecks, setTodayChecks]     = useState(0);
-  const [totalItems, setTotalItems]       = useState(0);
+  const [todayChecks, setTodayChecks] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
   const [monthSpending, setMonthSpending] = useState(0);
-  const [hasDiary, setHasDiary]           = useState(false);
+  const [hasDiary, setHasDiary] = useState(false);
 
-  const today    = new Date();
+  const today = new Date();
   const todayStr = localDateStr(today);
-  const mStart   = monthStart(todayStr);
+  const mStart = monthStart(todayStr);
+  const month = today.getMonth() + 1;
 
   useEffect(() => {
     async function load() {
@@ -61,7 +53,7 @@ export default function HomePage() {
       setTodayChecks(checksRes.count ?? 0);
       setHasDiary((diaryRes.count ?? 0) > 0);
       setMonthSpending(
-        (budgetRes.data ?? []).reduce((s, b) => s + (b.amount as number), 0)
+        (budgetRes.data ?? []).reduce((s, b) => s + (b.amount as number), 0),
       );
       setLoading(false);
     }
@@ -71,97 +63,144 @@ export default function HomePage() {
 
   const routinePct = totalItems > 0 ? Math.round((todayChecks / totalItems) * 100) : 0;
 
-  const month    = today.getMonth() + 1;
-  const date     = today.getDate();
-  const dayLabel = DAY_KO[today.getDay()];
-
   return (
-    <div className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-10 gap-5">
-
-      {/* ── 날짜 헤더 ─────────────────────────────────────────────── */}
+    <div
+      className="flex flex-col h-full overflow-y-auto px-5 pt-6 pb-10 gap-4"
+      style={{ background: "#f7f5f2" }}
+    >
+      {/* ── 1. 루틴 달성 러닝 카드 ────────────────────────────── */}
       <div>
-        <p className="text-[13px] text-gray-400 font-medium">
-          {month}월 {date}일 {dayLabel}요일
-        </p>
-        <h1 className="text-2xl font-semibold mt-0.5 text-gray-900">
-          {hasDiary ? "오늘도 수고했어요 ✨" : "오늘 하루 어떠셨나요?"}
-        </h1>
-      </div>
+        <div
+          style={{
+            position: "relative",
+            width: "100%",
+            height: 120,
+            borderRadius: 20,
+            overflow: "hidden",
+            border: "1px solid #f0ede8",
+          }}
+        >
+          {/* 배경 이미지 */}
+          <Image
+            src="/images/home_bg.png"
+            alt="background"
+            fill
+            style={{ objectFit: "cover", objectPosition: "center 98%" }}
+            unoptimized
+          />
 
-      {/* ── 루틴 카드 ─────────────────────────────────────────────── */}
-      <Card>
-        <div className="px-5 py-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span className="text-base">✅</span>
-              <span className="text-sm font-medium text-gray-700">오늘 루틴</span>
-            </div>
-            {loading ? (
-              <div className="h-4 w-16 bg-gray-100 rounded animate-pulse" />
-            ) : (
-              <span className="text-sm font-semibold text-gray-900">
-                {todayChecks}
-                <span className="text-gray-400 font-normal"> / {totalItems}</span>
-              </span>
-            )}
-          </div>
-          {/* 진행 바 */}
-          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-700"
-              style={{
-                width: loading ? "0%" : `${routinePct}%`,
-                background: routinePct === 100
-                  ? "linear-gradient(90deg, #34d399, #10b981)"
-                  : "linear-gradient(90deg, #a78bfa, #818cf8)",
-              }}
+          {/* 캐릭터 */}
+          <div
+            style={{
+              position: "absolute",
+              bottom: "28%",
+              left: `${loading ? 5 : 5 + (routinePct / 100) * 60}%`,
+              transition: "left 0.8s ease-out",
+              transform: "translateX(-50%)",
+              zIndex: 1,
+              pointerEvents: "none",
+            }}
+          >
+            <Image
+              src="/images/kitty.png"
+              alt="kitty"
+              width={40}
+              height={40}
+              style={{ imageRendering: "pixelated" }}
+              unoptimized
             />
           </div>
-          <p className="text-[11px] text-gray-400 mt-1.5 text-right">
-            {loading ? "" : routinePct === 100 ? "모두 완료!" : `${routinePct}% 달성`}
+        </div>
+
+        {/* 달성 텍스트 — 포켓몬 골드 대화창 */}
+        <div
+          style={{
+            backgroundImage: "url(/images/frame002.png)",
+            backgroundSize: "100% 100%",
+            backgroundColor: "transparent",
+            border: "none",
+            outline: "none",
+            padding: "12px 20px",
+            marginTop: 8,
+            textAlign: "center",
+          }}
+        >
+          <p style={{ fontSize: 9, color: "#1a1a1a", lineHeight: "1.8" }}>
+            {loading
+              ? "..."
+              : routinePct === 0
+                ? "아직 집에 돌아가지 않았다... 루틴을 시작하자!"
+                : routinePct < 50
+                  ? `다니엘은 집을 향해 걷고 있다... (${todayChecks}/${totalItems})`
+                  : routinePct < 100
+                    ? `다니엘의 발걸음이 빨라졌다! (${todayChecks}/${totalItems})`
+                    : "다니엘이 집에 돌아왔다! ★"}
           </p>
         </div>
-      </Card>
-
-      {/* ── 이번달 지출 + 일기 (2열) ──────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3">
-
-        {/* 변동지출 */}
-        <Card>
-          <div className="px-4 py-4">
-            <p className="text-[11px] text-gray-400 font-medium mb-2">이번달 변동지출</p>
-            {loading ? (
-              <div className="h-6 w-24 bg-gray-100 rounded animate-pulse" />
-            ) : (
-              <p className="text-lg font-bold text-gray-900">
-                ₩{monthSpending.toLocaleString("ko-KR")}
-              </p>
-            )}
-            <p className="text-[10px] text-gray-300 mt-1">{month}월 누계</p>
-          </div>
-        </Card>
-
-        {/* 일기 */}
-        <Card>
-          <div className="px-4 py-4">
-            <p className="text-[11px] text-gray-400 font-medium mb-2">오늘 일기</p>
-            {loading ? (
-              <div className="h-6 w-16 bg-gray-100 rounded animate-pulse" />
-            ) : (
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className="text-xl">{hasDiary ? "📖" : "📝"}</span>
-                <span
-                  className={`text-sm font-semibold ${hasDiary ? "text-emerald-500" : "text-gray-400"}`}
-                >
-                  {hasDiary ? "작성 완료" : "미작성"}
-                </span>
-              </div>
-            )}
-          </div>
-        </Card>
-
       </div>
 
+      {/* ── 2. 루틴 파티 ───────────────────────────────────────── */}
+      <RoutineParty />
+
+      {/* ── 3. 하단 2열 미니 카드 (하늘색) ────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        {/* 변동지출 */}
+        <div
+          style={{
+            background: "#a8d8f0",
+            borderRadius: 0,
+            padding: "16px 18px",
+            border: "3px solid #1a1a1a",
+            boxShadow: "3px 3px 0px #1a1a1a",
+            outline: "2px solid #1a1a1a",
+            outlineOffset: "-5px",
+          }}
+        >
+          <p style={{ fontSize: 7, color: "#1a1a1a", marginBottom: 10 }}>
+            이번달 변동지출
+          </p>
+          {loading ? (
+            <div style={{ height: 24, width: 96, background: "#8ec8e0", borderRadius: 0 }} />
+          ) : (
+            <p style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>
+              ₩{monthSpending.toLocaleString("ko-KR")}
+            </p>
+          )}
+          <p style={{ fontSize: 7, color: "#2a4a5a", marginTop: 6 }}>{month}월 누계</p>
+        </div>
+
+        {/* 일기 */}
+        <div
+          style={{
+            background: "#a8d8f0",
+            borderRadius: 0,
+            padding: "16px 18px",
+            border: "3px solid #1a1a1a",
+            boxShadow: "3px 3px 0px #1a1a1a",
+            outline: "2px solid #1a1a1a",
+            outlineOffset: "-5px",
+          }}
+        >
+          <p style={{ fontSize: 7, color: "#1a1a1a", marginBottom: 10 }}>
+            오늘 일기
+          </p>
+          {loading ? (
+            <div style={{ height: 24, width: 64, background: "#8ec8e0", borderRadius: 0 }} />
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+              <span style={{ fontSize: 20 }}>{hasDiary ? "📖" : "📝"}</span>
+              <span
+                style={{
+                  fontSize: 10,
+                  color: hasDiary ? "#1a5a1a" : "#4a4a4a",
+                }}
+              >
+                {hasDiary ? "작성 완료" : "미작성"}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

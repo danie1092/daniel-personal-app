@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { playCheckSound } from "@/lib/acSound";
-import RoutineParty from "@/components/RoutineParty";
-
 type Tab = "체크" | "그래프" | "설정";
 
 type RoutineItem = {
@@ -12,6 +10,9 @@ type RoutineItem = {
   name: string;
   emoji: string;
   sort_order: number;
+  pokemon_id: number | null;
+  level: number;
+  exp: number;
 };
 
 type DayStat = {
@@ -227,6 +228,26 @@ export default function RoutinePage() {
         { onConflict: "item_id,date" }
       );
       playCheckSound();
+
+      // EXP +10, 레벨업 처리
+      const item = items.find((i) => i.id === itemId);
+      if (item && item.pokemon_id != null) {
+        let newExp = item.exp + 10;
+        let newLevel = item.level;
+        if (newExp >= 100) {
+          newExp -= 100;
+          newLevel += 1;
+        }
+        await supabase
+          .from("routine_items")
+          .update({ exp: newExp, level: newLevel })
+          .eq("id", itemId);
+        setItems((prev) =>
+          prev.map((i) =>
+            i.id === itemId ? { ...i, exp: newExp, level: newLevel } : i
+          )
+        );
+      }
     }
 
     setToggling((prev) => { const s = new Set(prev); s.delete(itemId); return s; });
@@ -320,13 +341,6 @@ export default function RoutinePage() {
                 <span className="text-xs text-gray-400">{checkedCount}/{totalCount}</span>
               </div>
             </div>
-
-            {/* 루틴 파티 카드 */}
-            {!itemsLoading && items.length > 0 && (
-              <div className="px-4 pt-3">
-                <RoutineParty items={items} checkedIds={todayChecks} />
-              </div>
-            )}
 
             {itemsLoading ? (
               <p className="text-center text-gray-300 text-xs py-16">불러오는 중...</p>
