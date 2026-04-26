@@ -1,6 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { MEMO_TAGS } from "@/lib/constants";
+import { requireSession } from "@/lib/auth/requireSession";
+import { safeFetch } from "@/lib/og/safeFetch";
+import { parseOGMeta } from "@/lib/og/parseMeta";
 
 function getSupabase() {
   return createClient(
@@ -14,31 +17,17 @@ function getAnthropic() {
 }
 
 async function fetchOGMeta(url: string) {
-  try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "bot" },
-      signal: AbortSignal.timeout(5000),
-    });
-    const html = await res.text();
-    const title =
-      html.match(/<meta\s+property="og:title"\s+content="([^"]*)"/i)?.[1] ??
-      html.match(/<title>([^<]*)<\/title>/i)?.[1] ??
-      "";
-    const description =
-      html.match(
-        /<meta\s+property="og:description"\s+content="([^"]*)"/i
-      )?.[1] ??
-      html.match(
-        /<meta\s+name="description"\s+content="([^"]*)"/i
-      )?.[1] ??
-      "";
-    return { title, description };
-  } catch {
-    return { title: "", description: "" };
+  const result = await safeFetch(url);
+  if (!("body" in result)) {
+    return { title: "", description: "", image: "" };
   }
+  return parseOGMeta(result.body);
 }
 
 export async function POST() {
+  const session = await requireSession();
+  if (!session.ok) return session.response;
+
   try {
     const supabase = getSupabase();
     const anthropic = getAnthropic();
@@ -54,12 +43,11 @@ export async function POST() {
       return Response.json({ groups: [] });
     }
 
-    // OG 메타데이터 크롤링
     const enriched = await Promise.all(
-      items.map(async (item) => {
-        const og = await fetchOGMeta(item.url);
-        return { ...item, og };
-      })
+      items.map(async (item) => ({
+        ...item,
+        og: await fetchOGMeta(item.url),
+      }))
     );
 
     const itemsText = enriched
