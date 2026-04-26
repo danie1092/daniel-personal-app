@@ -7,7 +7,7 @@
 -- 적용 방법: Supabase Dashboard → SQL Editor → 이 파일 전체 붙여넣기 → Run
 --
 -- 사전 점검 (이미 확인됨):
---   - 다마고치 관련 테이블(tamagotchi_state)은 Phase 1에서 drop 예정이므로 정책 생략
+--   - tamagotchi_state는 Phase 1에서 drop 예정이지만 Advisor 경고 해소 위해 임시 정책 적용
 --   - routine_entries는 0 rows 레거시 테이블 → drop
 
 -- ── routine_entries (레거시, 0 rows, 코드 미사용) drop ─
@@ -55,5 +55,11 @@ DROP POLICY IF EXISTS owner_only ON collected_items;
 CREATE POLICY owner_only ON collected_items
   FOR ALL USING (auth.uid()::text = user_id::text)
   WITH CHECK (auth.uid()::text = user_id::text);
+
+-- ── tamagotchi_state (Phase 1에서 drop 예정, 임시 정책으로 Advisor 경고 해소) ─
+ALTER TABLE tamagotchi_state ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS authenticated_all ON tamagotchi_state;
+CREATE POLICY authenticated_all ON tamagotchi_state
+  FOR ALL USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
 
 -- service_role 키는 RLS를 우회하므로 모든 서버 라우트는 영향 없음
