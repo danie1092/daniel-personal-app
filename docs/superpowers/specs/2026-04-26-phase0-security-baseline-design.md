@@ -202,9 +202,17 @@ BUDGET_HMAC_SECRET=
 
 **조치**: `next.config.ts`의 `next-pwa` `runtimeCaching` 정책에서 `/api/*` 명시적 제외. 인증 필요한 페이지(`/home`, `/memo` 등)는 `NetworkFirst`로 두되 `cacheableResponse`로 200대만 캐시.
 
-### Task 0-11. Supabase 자동 백업 확인
+### Task 0-11. Supabase 백업 / PITR 활성화
 
-**조치**: Supabase 대시보드에서 일일 자동 백업 활성화 여부 확인. PITR(Point-in-Time Recovery)은 Pro 플랜이 필요하므로 무료 플랜이면 daily backup만 확인하고 결과 기록.
+**전제**: Pro 플랜 (사용자 확인됨, 2026-04-26).
+
+**조치**:
+1. Supabase 대시보드 → Database → Backups에서 **PITR(Point-in-Time Recovery) 활성화**
+2. Daily backup 보존 기간 확인 (Pro 기본 7일)
+3. PITR retention은 비용에 영향 — 기본 7일로 설정, 필요 시 조정
+4. 활성화 후 복구 절차를 `docs/operations/disaster-recovery.md`에 1페이지로 정리 (Phase 1 진입 전에 정리 끝)
+
+**근거**: Phase 1에서 다마고치 테이블 drop, RLS 정책 적용, 클라이언트 호출 마이그레이션 등 DB 변경이 누적되므로 PITR이 켜진 상태에서 작업 시작.
 
 ### Task 0-12. Anthropic 콘솔 monthly cost limit
 
@@ -250,7 +258,7 @@ src/lib/rateLimit/
 
 - **RLS 활성화 시 클라이언트 직접 호출 페이지가 깨질 수 있음** → Task 0-13의 인벤토리를 참고해 Phase 1에서 서버 컴포넌트로 이전. Phase 0 단독으로 RLS만 켜면 페이지가 작동 안 할 수 있어, **RLS는 정책 SQL 작성·테스트만 하고 실 활성화는 Phase 1과 함께**
 - **gitleaks 발견 시 작업 범위 확대 가능성** → 발견되면 그 범위 안에서 추가 회전 + 사용자 보고
-- **Supabase 무료 플랜의 daily backup 한계** → PITR 없으면 사고 시 최대 24시간 데이터 손실 가능. 사용자에게 보고하고 수용 여부 확인
+- **PITR 활성화 시 추가 비용** → Pro 플랜 기본은 daily 7일, PITR은 retention 일수당 추가 과금. 7일 기준으로 시작하고 청구서 모니터링
 
 ## 환경변수 변경 요약
 
