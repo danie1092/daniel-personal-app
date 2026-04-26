@@ -1,45 +1,68 @@
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css');
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════
+   디자인 토큰 — 지점앱 1:1 차용 (success만 #22C55E)
+   ═══════════════════════════════════════════════════ */
+@theme {
+  /* Colors */
+  --color-bg: #F4F6F8;
+  --color-surface: #FFFFFF;
+  --color-ink: #121417;
+  --color-ink-sub: #6B7684;
+  --color-ink-muted: #8B95A1;
+  --color-hair: #E5E8EB;
+  --color-hair-light: #F2F4F6;
+  --color-primary: #2E6FF2;
+  --color-primary-soft: #E8F0FE;
+  --color-success: #22C55E;
+  --color-success-soft: #DCFCE7;
+  --color-danger: #DC2626;
+  --color-danger-soft: #FDECEC;
+  --color-warning: #F59E0B;
+
+  /* Radii */
+  --radius-card: 16px;
+  --radius-card-lg: 20px;
+  --radius-sheet: 24px;
+  --radius-btn: 14px;
+  --radius-input: 12px;
+  --radius-chip: 6px;
+
+  /* Shadows */
+  --shadow-card: 0 1px 2px rgba(17,24,39,0.04), 0 4px 14px rgba(17,24,39,0.04);
+  --shadow-soft: 0 1px 2px rgba(17,24,39,0.04), 0 4px 14px rgba(17,24,39,0.03);
+  --shadow-fab: 0 4px 12px rgba(46,111,242,0.28);
+
+  /* Font family */
+  --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+}
+
+/* ═══════════════════════════════════════════════════
+   Base
+   ═══════════════════════════════════════════════════ */
 :root {
-  --background: #ffffff;
-  --foreground: #000000;
+  --background: var(--color-bg);
+  --foreground: var(--color-ink);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: 'Press Start 2P', monospace;
-  font-weight: 400;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-weight: 500;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior: none;
 }
 
-/* Pretendard 굵기 유틸리티 */
-.font-light   { font-weight: 300; }
-.font-medium  { font-weight: 500; }
+input, textarea, button {
+  font-family: inherit;
+}
 
 /* iOS safe area */
 .safe-area-pb {
   padding-bottom: env(safe-area-inset-bottom);
-}
-
-/* iOS-style input */
-.ios-input {
-  width: 100%;
-  background-color: #f5f5f5;
-  border-radius: 12px;
-  padding: 12px 16px;
-  font-size: 16px;
-  outline: none;
-  border: none;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.ios-input:focus {
-  background-color: #f0f0f0;
 }
 
 /* Hide scrollbar */
@@ -56,46 +79,11 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-8px); }
+/* Slide-up animation for sheets/modals */
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }
-
-@keyframes spriteFloat {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-6px); }
-}
-
-@keyframes spriteWiggle {
-  0%   { transform: rotate(0deg) scale(1); }
-  25%  { transform: rotate(-8deg) scale(1.1); }
-  50%  { transform: rotate(8deg) scale(1.1); }
-  75%  { transform: rotate(-4deg) scale(1.05); }
-  100% { transform: rotate(0deg) scale(1); }
-}
-
-@keyframes spriteEat {
-  0%, 100% { transform: translateY(0px) scale(1); }
-  50%       { transform: translateY(-3px) scale(1.05); }
-}
-
-@keyframes heartFloat {
-  0%   { transform: translateY(0px) scale(0.5); opacity: 1; }
-  100% { transform: translateY(-50px) scale(1.2); opacity: 0; }
-}
-
-@keyframes starBounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-
-@keyframes rainbow-glow {
-  0%   { filter: drop-shadow(0 0 4px #ff6b6b) drop-shadow(0 0 8px #ff6b6b); }
-  14%  { filter: drop-shadow(0 0 4px #ffa94d) drop-shadow(0 0 8px #ffa94d); }
-  28%  { filter: drop-shadow(0 0 4px #ffe066) drop-shadow(0 0 8px #ffe066); }
-  42%  { filter: drop-shadow(0 0 4px #69db7c) drop-shadow(0 0 8px #69db7c); }
-  57%  { filter: drop-shadow(0 0 4px #4dabf7) drop-shadow(0 0 8px #4dabf7); }
-  71%  { filter: drop-shadow(0 0 4px #9775fa) drop-shadow(0 0 8px #9775fa); }
-  85%  { filter: drop-shadow(0 0 4px #f783ac) drop-shadow(0 0 8px #f783ac); }
-  100% { filter: drop-shadow(0 0 4px #ff6b6b) drop-shadow(0 0 8px #ff6b6b); }
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
 }
