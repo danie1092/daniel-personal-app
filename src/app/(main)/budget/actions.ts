@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { BUDGET_CATEGORIES, PAYMENT_METHODS, FIXED_EXPENSES } from "@/lib/constants";
 import { entryType, NO_PAYMENT_CATEGORIES, type BudgetCategory } from "@/lib/budget/categoryTokens";
 
-export type ActionResult<T = void> =
+export type ActionResult<T = object> =
   | ({ ok: true } & T)
   | { ok: false; error: string };
 
