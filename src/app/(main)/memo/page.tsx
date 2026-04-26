@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { MEMO_TAGS } from "@/lib/constants";
 import { TAG_COLORS } from "@/lib/memoColors";
 import { createClient } from "@/lib/supabase/client";
+import { MemoCurationPlaceholder } from "./MemoCurationPlaceholder";
 
 const supabase = createClient();
 
@@ -42,6 +44,18 @@ function timeAgo(dateStr: string) {
 }
 
 export default function MemoPage() {
+  return (
+    <Suspense fallback={<div className="flex flex-col h-full" />}>
+      <MemoPageContent />
+    </Suspense>
+  );
+}
+
+function MemoPageContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const activeTab = searchParams.get("tab") === "curation" ? "curation" : "memo";
+
   const [content, setContent] = useState("");
   const [selectedTag, setSelectedTag] = useState<string>(MEMO_TAGS[0]);
   const [search, setSearch] = useState("");
@@ -172,8 +186,36 @@ export default function MemoPage() {
 
   return (
     <div className="flex flex-col h-full">
+      {/* 탭 헤더 (Phase 1 신규) */}
+      <div className="flex gap-1.5 px-4 pt-4 pb-2 bg-white z-20">
+        <button
+          onClick={() => router.replace("/memo")}
+          className={
+            activeTab === "memo"
+              ? "px-3 py-1.5 rounded-input bg-ink text-white text-[12px] font-bold"
+              : "px-3 py-1.5 rounded-input bg-hair-light text-ink-sub text-[12px] font-semibold"
+          }
+        >
+          메모
+        </button>
+        <button
+          onClick={() => router.replace("/memo?tab=curation")}
+          className={
+            activeTab === "curation"
+              ? "px-3 py-1.5 rounded-input bg-ink text-white text-[12px] font-bold"
+              : "px-3 py-1.5 rounded-input bg-hair-light text-ink-sub text-[12px] font-semibold"
+          }
+        >
+          큐레이션
+        </button>
+      </div>
+
+      {activeTab === "curation" ? (
+        <MemoCurationPlaceholder />
+      ) : (
+        <>
       {/* 헤더 */}
-      <div className="px-4 pt-5 pb-2 sticky top-0 bg-white z-10">
+      <div className="px-4 pt-5 pb-2 bg-white z-10">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-xl font-bold">메모</h1>
           {inboxCount > 0 && (
@@ -372,6 +414,8 @@ export default function MemoPage() {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
 
       <style jsx>{`
