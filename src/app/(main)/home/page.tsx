@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
-import RoutineParty from "@/components/RoutineParty";
 
 // ── 유틸 ──────────────────────────────────────────────────────────────────────
 function localDateStr(d: Date): string {
@@ -161,7 +160,7 @@ export default function HomePage() {
       </div>
 
       {/* ── 2. 루틴 파티 ───────────────────────────────────────── */}
-      <RoutineParty />
+      <div className="text-center text-gray-400 text-xs py-4">루틴 위젯 — Task 5에서 재작성</div>
 
       <div style={{ borderTop: "1px dashed #d0ccc7" }} />
 
