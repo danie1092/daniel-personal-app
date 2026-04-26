@@ -37,22 +37,28 @@ function isPrivateV4(ip: string): boolean {
 
 function isPrivateV6(ip: string): boolean {
   const lower = ip.toLowerCase();
+  // IPv4-mapped IPv6: ::ffff:a.b.c.d → IPv4 검사로 위임
+  const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped && isPrivateV4(mapped[1])) return true;
   if (lower === "::1") return true; // loopback
   if (lower.startsWith("fc") || lower.startsWith("fd")) return true; // fc00::/7 unique local
   if (lower.startsWith("fe8") || lower.startsWith("fe9") || lower.startsWith("fea") || lower.startsWith("feb")) return true; // fe80::/10
+  // 주: fec0::/10 (deprecated site-local, RFC 3879)는 의도적으로 차단 안 함 (실사용 거의 없음)
   return false;
 }
 
 async function resolveAndCheck(host: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  // IPv6 리터럴은 URL.hostname에서 [..] 대괄호가 붙어 있을 수 있음 (예: "[::1]")
+  const normalized = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
   // host가 이미 IP면 그대로 검사
-  if (isIP(host) === 4) {
-    return isPrivateV4(host) ? { ok: false, error: "blocked_private_ip" } : { ok: true };
+  if (isIP(normalized) === 4) {
+    return isPrivateV4(normalized) ? { ok: false, error: "blocked_private_ip" } : { ok: true };
   }
-  if (isIP(host) === 6) {
-    return isPrivateV6(host) ? { ok: false, error: "blocked_private_ip" } : { ok: true };
+  if (isIP(normalized) === 6) {
+    return isPrivateV6(normalized) ? { ok: false, error: "blocked_private_ip" } : { ok: true };
   }
   try {
-    const { address, family } = await dns.lookup(host);
+    const { address, family } = await dns.lookup(normalized);
     if (family === 4 && isPrivateV4(address)) return { ok: false, error: "blocked_private_ip" };
     if (family === 6 && isPrivateV6(address)) return { ok: false, error: "blocked_private_ip" };
     return { ok: true };
@@ -99,6 +105,10 @@ export async function safeFetch(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
 
+  // 알려진 잔존 위험: DNS rebinding.
+  // 우리는 resolveAndCheck에서 한 번 lookup하고, fetch가 내부적으로 다시 lookup함.
+  // 두 번의 응답이 다를 경우(악의적 DNS) 사설 IP 도달 가능. OG 메타 용도에선 수용.
+  // 강한 방어가 필요하면 IP로 직접 연결 + Host 헤더 패턴으로 전환.
   let currentUrl = url;
   try {
     for (let i = 0; i <= MAX_REDIRECTS; i++) {
