@@ -11,6 +11,11 @@
 - Compute: micro (현재)
 - 청구서 모니터링: 월 1회
 
+### TODO (낮은 우선순위)
+- Tax ID 등록 — Supabase 대시보드 상단 빨간 배너 (Billing details → Tax information)
+  - 응암점 사업자 등록번호 입력하면 해소
+  - 결제·청구서 처리/세금 계산용. 보안 무관.
+
 ## Vercel
 - Hobby 또는 Pro (확인 필요)
 - 함수 실행시간 / 대역폭 모니터링은 매월 1회 점검

@@ -1,8 +1,17 @@
 -- supabase_migration_phase0_rls.sql
--- 적용 시점: Phase 1 (클라이언트 supabase 직접 호출이 모두 서버 컴포넌트/API로 이전된 후)
--- 사전 점검:
---   1) docs/superpowers/specs/2026-04-26-client-supabase-usage.md 인벤토리의 모든 항목이 서버 측으로 이전되었는지
---   2) 다마고치 관련 테이블은 Phase 1에서 drop되므로 정책 생략
+-- 적용 시점: Phase 0 내에 즉시 적용 (Supabase Advisor Critical 경고 해소)
+-- 근거: 클라이언트는 createBrowserClient로 세션 쿠키 기반 호출 → 미들웨어가 미인증을 /login으로 리다이렉트
+--       → auth.uid() IS NOT NULL 정책이면 기존 클라이언트 코드 그대로 작동
+-- 롤백: 각 ALTER TABLE을 DISABLE ROW LEVEL SECURITY로 바꾸거나 DROP POLICY로 제거
+--
+-- 적용 방법: Supabase Dashboard → SQL Editor → 이 파일 전체 붙여넣기 → Run
+--
+-- 사전 점검 (이미 확인됨):
+--   - 다마고치 관련 테이블(tamagotchi_state)은 Phase 1에서 drop 예정이므로 정책 생략
+--   - routine_entries는 0 rows 레거시 테이블 → drop
+
+-- ── routine_entries (레거시, 0 rows, 코드 미사용) drop ─
+DROP TABLE IF EXISTS routine_entries;
 
 -- ── memo_entries ───────────────────────────────────────
 ALTER TABLE memo_entries ENABLE ROW LEVEL SECURITY;
