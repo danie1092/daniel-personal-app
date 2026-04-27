@@ -16,6 +16,8 @@ CREATE POLICY "own rows" ON merchant_category_map
 
 -- 2. budget_entries 중복 방지 UNIQUE 제약
 -- (정확히 같은 결제가 두 번 들어오는 경우는 0이라고 가정)
+-- 주의: budget_entries엔 user_id 컬럼이 없음 (단일 사용자 앱).
+--       멀티유저 도입 시 컬럼 추가 + 본 제약 재정의 필요.
 ALTER TABLE budget_entries
   ADD CONSTRAINT budget_entries_dedup_uniq
-  UNIQUE (user_id, date, amount, memo, payment_method);
+  UNIQUE (date, amount, memo, payment_method);

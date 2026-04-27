@@ -41,7 +41,7 @@
 6. **카테고리 정책**: 룰 사전(`merchant_category_map`) 우선 → 미스면 `"미분류"` 고정.
 7. **자동 학습 트리거**: 가계부 페이지의 `updateCategory` Server Action에서 미분류 → 카테고리 변경 시 ① `merchant_category_map` upsert ② 같은 user + merchant + `category="미분류"` 상태인 다른 entries 일괄 update.
 8. **연도 결정**: chat.db `message.date`(Apple epoch ns, 2001-01-01 기준) → KST 변환 → 그 시점의 YYYY 사용.
-9. **중복 방지**: API 측에 `(user_id, date, amount, merchant, payment_method)` UNIQUE 제약. state.txt 유실 시 재처리해도 DB가 막음.
+9. **중복 방지**: `budget_entries`에 `(date, amount, memo, payment_method)` UNIQUE 제약. state.txt 유실 시 재처리해도 DB가 막음. (production 스키마에 `user_id` 컬럼이 없어 단일 사용자 가정으로 진행. 멀티유저 도입 시 user_id 컬럼 추가 + 제약 재정의 필요.)
 10. **파서 분리**: 단일 파일 → `src/lib/budget/parsers/{hyundai,woori}.ts` + `index.ts`(라우트 함수). 카드 추가 시 파서 1개 + parsers 배열 1줄만 수정. 하나체크카드(`hana.ts`)는 사용자가 SMS 신청 후 별도 후속 작업으로 추가.
 11. **raw_text 길이 제한**: 4KB 초과 시 400 반환. 정규식 backtracking 방어 + 메모리/CPU 폭주 차단.
 12. **로그 위생**: `failed-parses.log` / `failed-network.log` 모두 mode 600. 100KB 도달 시 `*.1`로 회전, 최대 5개 보존, 그 이후는 폐기. SMS 본문엔 카드번호 끝 4자리 / 누적 결제액이 포함되므로 평문 보호 필요.
@@ -69,12 +69,10 @@ ALTER TABLE merchant_category_map ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "own rows" ON merchant_category_map
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- 2. 중복 방지 UNIQUE 제약
--- (정확히 같은 결제가 두 번 들어오는 경우는 0이라고 가정. 같은 가맹점 동일 금액 동일 일자가
--- 진짜 두 번 발생하는 일은 거의 없고, 발생하더라도 사용자가 손으로 추가하는 게 빠름)
+-- 2. 중복 방지 UNIQUE 제약 (단일 사용자 앱 — budget_entries엔 user_id 컬럼 없음)
 ALTER TABLE budget_entries
   ADD CONSTRAINT budget_entries_dedup_uniq
-  UNIQUE (user_id, date, amount, memo, payment_method);
+  UNIQUE (date, amount, memo, payment_method);
 ```
 
 > `budget_entries.memo`에는 merchant가 들어간다 (Phase 1.5b 기준). `merchant`라는 별도 컬럼은 없음.
@@ -153,7 +151,7 @@ ALTER TABLE budget_entries
 | `src/lib/budget/parsers/index.ts` | `parsers: ((text: string, smsDate: Date) => Parsed \| null)[]` 배열, `parse()` 함수 |
 | `src/lib/budget/categorize.ts` | `lookupCategory(supabase, userId, merchant): Promise<string>`. 미스 시 `"미분류"` |
 | `src/lib/budget/types.ts` | `Parsed = { amount, merchant, date, payment_method }` |
-| `src/app/api/budget/auto/route.ts` | 위 모듈 조합. user_id는 secret 인증이라 환경변수 `BUDGET_SMS_USER_ID`로 고정 (사용자 본인의 user uuid). raw_text 4KB 초과 시 400. rate limit은 secret 체크 이전 |
+| `src/app/api/budget/auto/route.ts` | 위 모듈 조합. `budget_entries`엔 user_id 컬럼이 없어 INSERT에 user_id 안 들어감. `merchant_category_map` upsert 시에는 RLS 충족 위해 환경변수 `DEFAULT_USER_ID`(이미 `/api/collect`에서 사용 중) 재사용. raw_text 4KB 초과 시 400. rate limit은 secret 체크 이전 |
 | `docs/operations/budget-sms-runbook.md` | **신규**. secret 로테이션, 새 카드 파서 추가, poll.sh 디버깅, 환경변수 동기화 체크리스트 |
 
 ### 가계부 페이지 측 (Phase 1.5b 위에 보강)
@@ -196,7 +194,7 @@ ALTER TABLE budget_entries
 
 - **인증**: `BUDGET_SMS_SECRET` (256bit 랜덤). 맥미니의 `secret.env`에만 평문 저장 (mode 600). Vercel 환경변수에도 동일 값. timing-safe 비교.
 - **Rate limit**: `budget-auto:global` 키, 30/분 + 500/일. Phase 2의 `collect:global` 패턴 그대로.
-- **user_id 처리**: 본 endpoint는 단일 사용자 전용이라 `BUDGET_SMS_USER_ID` 환경변수로 고정. 다중 사용자 확장 시 secret을 user별로 발급하는 식으로 변경 (미래 확장점, 지금은 단순화).
+- **user_id 처리**: 본 endpoint는 단일 사용자 전용. `budget_entries` INSERT에는 user_id 안 들어감(컬럼 자체가 없음). `merchant_category_map` upsert 시에만 `DEFAULT_USER_ID` 환경변수 재사용. 다중 사용자 확장 시 budget_entries에 user_id 컬럼 추가 + secret을 user별 발급으로 변경.
 - **anon key 사용 중단**: 기존 코드는 `NEXT_PUBLIC_SUPABASE_ANON_KEY`로 INSERT — Service Role Key로 교체 (RLS 우회) + secret으로 외부 차단.
 - **로컬 secret 노출 방지**: `~/.config/budget-sms/`는 사용자 home 아래라 다른 사용자 접근 불가. plist엔 secret 박지 않음 (poll.sh가 `secret.env` source). `secret.env`는 mode 600 + Time Machine/iCloud 백업 제외 (`tmutil addexclusion` 또는 백업 대상 외 경로 사용 — 위치 확정은 plan 단계).
 - **DoS 방어 순서**: rate limit을 secret 체크 **이전**에 배치 (또는 secret 체크에 도달하기 전 IP 단위 가벼운 limit 1단). secret 모르는 봇 폭탄 시 401 응답에도 Vercel invocations가 소모되는 비용을 막기 위함. Phase 0 `requireCronSecret` 호출 사이트에서 패턴 확인 후 plan에서 확정.

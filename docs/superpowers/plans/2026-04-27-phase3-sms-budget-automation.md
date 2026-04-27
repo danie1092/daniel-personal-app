@@ -82,9 +82,10 @@ CREATE POLICY "own rows" ON merchant_category_map
 
 -- 2. budget_entries 중복 방지 UNIQUE 제약
 -- (정확히 같은 결제가 두 번 들어오는 경우는 0이라고 가정)
+-- 주의: budget_entries엔 user_id 컬럼 없음 (단일 사용자 앱). 멀티유저 도입 시 컬럼 추가 + 제약 재정의 필요.
 ALTER TABLE budget_entries
   ADD CONSTRAINT budget_entries_dedup_uniq
-  UNIQUE (user_id, date, amount, memo, payment_method);
+  UNIQUE (date, amount, memo, payment_method);
 ```
 
 - [ ] **Step 2: 사용자에게 실행 안내**
@@ -740,7 +741,6 @@ describe("/api/budget/auto", () => {
     const res = await POST(makeReq({ raw_text: "현대카드 1000원" }));
     expect(res.status).toBe(201);
     expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
-      user_id: "u1",
       amount: 1000,
       memo: "신규",
       category: "미분류",
@@ -748,6 +748,7 @@ describe("/api/budget/auto", () => {
       date: "2026-04-27",
       type: "expense",
     }));
+    // budget_entries에 user_id 컬럼 없음 — INSERT payload에도 user_id 빠짐
   });
 
   test("정상 + 사전 히트 → 201, 분류 적용", async () => {
@@ -848,10 +849,10 @@ export async function POST(req: NextRequest) {
 
   const category = await lookupCategory(supabase, userId, parsed.merchant);
 
+  // budget_entries엔 user_id 컬럼이 없음 (단일 사용자 앱). INSERT payload에도 없음.
   const { data, error } = await supabase
     .from("budget_entries")
     .insert({
-      user_id: userId,
       date: parsed.date,
       amount: parsed.amount,
       memo: parsed.merchant,
@@ -926,8 +927,9 @@ describe("updateBudgetEntry — 학습 트리거", () => {
     // 3) upsert — merchant_category_map
     const upsert = vi.fn().mockReturnValue(Promise.resolve({ error: null }));
     // 4) update — 같은 merchant 미분류 일괄
+    // budget_entries 일괄 update — eq("memo") + eq("category") 2단계 (user_id 없음)
     const update2 = vi.fn().mockReturnValue({
-      eq: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null, count: opts.bulkUpdated ?? 0 }) }) }),
+      eq: () => ({ eq: () => Promise.resolve({ error: null, count: opts.bulkUpdated ?? 0 }) }),
     });
 
     let n = 0;
@@ -1001,7 +1003,7 @@ describe("updateBudgetEntry — 학습 트리거", () => {
       if (n === 1) return { select: currentSelect };
       if (n === 2) return { update: update1 };
       if (table === "merchant_category_map") return { upsert };
-      return { update: vi.fn().mockReturnValue({ eq: () => ({ eq: () => ({ eq: () => Promise.resolve({}) }) }) }) };
+      return { update: vi.fn().mockReturnValue({ eq: () => ({ eq: () => Promise.resolve({}) }) }) };
     });
 
     const result = await updateBudgetEntry("e1", {
@@ -1081,10 +1083,10 @@ export async function updateBudgetEntry(id: string, input: EntryInput): Promise<
       }
 
       // 3-2) 같은 merchant + 미분류 entries 일괄 update
+      // budget_entries에 user_id 컬럼이 없으므로 user 매칭 X (단일 사용자 앱)
       const { error: bulkErr } = await supabase
         .from("budget_entries")
         .update({ category: input.category, type: entryType(input.category) })
-        .eq("user_id", userId)
         .eq("memo", input.memo)
         .eq("category", "미분류");
       if (bulkErr) {
