@@ -1,10 +1,23 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { requireBearer } from "@/lib/auth/requireBearer";
+import { checkCollectLimit } from "@/lib/rateLimit/upstash";
+import { processCollectedItem } from "@/lib/curation/process";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 export async function POST(request: NextRequest) {
   const auth = requireBearer(request, process.env.COLLECT_API_KEY);
   if (!auth.ok) return auth.response;
+
+  const limit = await checkCollectLimit();
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded" },
+      { status: 429, headers: { "retry-after": String(limit.retryAfter) } }
+    );
+  }
 
   try {
     const supabase = createClient(
@@ -22,7 +35,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Memo too long" }, { status: 400 });
     }
 
-    // 스킴 화이트리스트 (저장 단계에서도 한 번 더 막음)
     try {
       const u = new URL(url);
       if (u.protocol !== "http:" && u.protocol !== "https:") {
@@ -61,9 +73,18 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) throw error;
+
+    // 베스트-에포트 인라인 처리. 실패해도 201 유지(다음 cron이 회수).
+    const inserted = data as { id: string };
+    try {
+      await processCollectedItem(inserted.id);
+    } catch (err) {
+      console.error("collect inline process:", err instanceof Error ? err.message : "unknown");
+    }
+
     return NextResponse.json({ success: true, data }, { status: 201 });
   } catch (error) {
-    console.error("Collect API error:", error);
+    console.error("Collect API error:", error instanceof Error ? error.message : "unknown");
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
