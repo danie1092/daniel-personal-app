@@ -62,3 +62,31 @@ describe("checkCollectLimit", () => {
     expect(r.ok).toBe(true);
   });
 });
+
+describe("checkBudgetSmsLimit", () => {
+  test("env 미설정 시 fail-open", async () => {
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    const { checkBudgetSmsLimit } = await import("./upstash");
+    const result = await checkBudgetSmsLimit();
+    expect(result).toEqual({ ok: true });
+  });
+
+  // mock의 prefix 분기는 collect-h만 hourLimitMock, 그 외(budget-sms-m/d 포함)는 dayLimitMock 사용.
+  // 같은 mock이 minute/day 두 번 호출되므로 mockResolvedValue로 일관 응답 set.
+  test("둘 다 통과하면 ok", async () => {
+    dayLimitMock.mockResolvedValue({ success: true, remaining: 29, reset: Date.now() + 60_000 });
+    const { checkBudgetSmsLimit } = await import("./upstash");
+    const r = await checkBudgetSmsLimit();
+    expect(r.ok).toBe(true);
+  });
+
+  test("차단 → ok=false + retryAfter", async () => {
+    const reset = Date.now() + 2000;
+    dayLimitMock.mockResolvedValue({ success: false, remaining: 0, reset });
+    const { checkBudgetSmsLimit } = await import("./upstash");
+    const r = await checkBudgetSmsLimit();
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.retryAfter).toBeGreaterThanOrEqual(1);
+  });
+});

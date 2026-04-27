@@ -20,7 +20,7 @@ vi.mock("next/cache", () => ({
   revalidatePath: revalidatePathMock,
 }));
 
-import { createBudgetEntry, deleteBudgetEntry, addFixedExpenses } from "./actions";
+import { createBudgetEntry, deleteBudgetEntry, addFixedExpenses, updateBudgetEntry } from "./actions";
 
 function authed() {
   requireSessionMock.mockResolvedValue({ ok: true, user: { id: "u1" } });
@@ -145,5 +145,107 @@ describe("addFixedExpenses", () => {
       expect(result.added).toBe(0);
       expect(result.skipped).toBe(10);
     }
+  });
+});
+
+describe("updateBudgetEntry — 학습 트리거", () => {
+  // 헬퍼: from 호출별 응답 매핑
+  function setupSupabase(opts: {
+    selectCurrent: { category: string; memo: string };
+    bulkUpdated?: number;
+  }) {
+    // 1) select(category, memo) — 현재 entry 조회
+    const currentSelect = vi.fn().mockReturnValue({
+      eq: () => ({ single: () => Promise.resolve({ data: opts.selectCurrent, error: null }) }),
+    });
+    // 2) update — entry 본인
+    const update1 = vi.fn().mockReturnValue({ eq: () => Promise.resolve({ error: null }) });
+    // 3) upsert — merchant_category_map
+    const upsert = vi.fn().mockReturnValue(Promise.resolve({ error: null }));
+    // 4) update — 같은 merchant 미분류 일괄. eq("memo") + eq("category") 2단계 (user_id 없음)
+    const update2 = vi.fn().mockReturnValue({
+      eq: () => ({ eq: () => Promise.resolve({ error: null, count: opts.bulkUpdated ?? 0 }) }),
+    });
+
+    let n = 0;
+    fromMock.mockImplementation((table: string) => {
+      n += 1;
+      if (table === "budget_entries" && n === 1) return { select: currentSelect };
+      if (table === "budget_entries" && n === 2) return { update: update1 };
+      if (table === "merchant_category_map") return { upsert };
+      if (table === "budget_entries") return { update: update2 };
+      throw new Error("unexpected from()");
+    });
+
+    return { upsert, update2 };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authed();
+  });
+
+  test("미분류 → 카테고리 변경 시 사전 upsert + 일괄 update 트리거", async () => {
+    const { upsert, update2 } = setupSupabase({ selectCurrent: { category: "미분류", memo: "스타벅스" } });
+
+    const result = await updateBudgetEntry("e1", {
+      date: "2026-04-27", category: "카페", description: "", memo: "스타벅스",
+      amount: 5000, paymentMethod: "현대카드",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
+      merchant: "스타벅스",
+      category: "카페",
+    }), expect.objectContaining({ onConflict: "user_id,merchant" }));
+    expect(update2).toHaveBeenCalled();
+  });
+
+  test("이미 분류된 entry → 사전/일괄 update 호출 안 함", async () => {
+    const { upsert, update2 } = setupSupabase({ selectCurrent: { category: "식사", memo: "x" } });
+
+    await updateBudgetEntry("e1", {
+      date: "2026-04-27", category: "카페", description: "", memo: "x",
+      amount: 1000, paymentMethod: "현대카드",
+    });
+
+    expect(upsert).not.toHaveBeenCalled();
+    expect(update2).not.toHaveBeenCalled();
+  });
+
+  test("미분류 → 미분류 (변화 없음) → 학습 안 함", async () => {
+    const { upsert, update2 } = setupSupabase({ selectCurrent: { category: "미분류", memo: "x" } });
+
+    await updateBudgetEntry("e1", {
+      date: "2026-04-27", category: "미분류" as never, description: "", memo: "x",
+      amount: 1000, paymentMethod: "현대카드",
+    });
+
+    expect(upsert).not.toHaveBeenCalled();
+    expect(update2).not.toHaveBeenCalled();
+  });
+
+  test("학습/일괄 update 실패해도 entry 본인 update는 성공", async () => {
+    // 1) select OK 2) update OK 3) upsert FAIL → 그 후 단계는 호출되지만 무시
+    const currentSelect = vi.fn().mockReturnValue({
+      eq: () => ({ single: () => Promise.resolve({ data: { category: "미분류", memo: "x" }, error: null }) }),
+    });
+    const update1 = vi.fn().mockReturnValue({ eq: () => Promise.resolve({ error: null }) });
+    const upsert = vi.fn().mockReturnValue(Promise.resolve({ error: { message: "boom" } }));
+    let n = 0;
+    fromMock.mockImplementation((table: string) => {
+      n += 1;
+      if (n === 1) return { select: currentSelect };
+      if (n === 2) return { update: update1 };
+      if (table === "merchant_category_map") return { upsert };
+      return { update: vi.fn().mockReturnValue({ eq: () => ({ eq: () => Promise.resolve({}) }) }) };
+    });
+
+    const result = await updateBudgetEntry("e1", {
+      date: "2026-04-27", category: "카페", description: "", memo: "x",
+      amount: 1000, paymentMethod: "현대카드",
+    });
+
+    expect(result).toEqual({ ok: true });
   });
 });

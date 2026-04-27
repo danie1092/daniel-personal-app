@@ -1,136 +1,91 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireBearer } from "@/lib/auth/requireBearer";
+import { checkBudgetSmsLimit } from "@/lib/rateLimit/upstash";
+import { parse } from "@/lib/budget/parsers";
+import { lookupCategory } from "@/lib/budget/categorize";
 
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-}
+export const dynamic = "force-dynamic";
+export const maxDuration = 15;
 
-// ── 파싱 ──────────────────────────────────────────────────────────────────────
-
-interface Parsed {
-  amount: number;
-  merchant: string;
-  date: string;
-  payment_method: string;
-}
-
-/** "13,200원" → 13200 */
-function parseAmount(raw: string): number {
-  return parseInt(raw.replace(/[^0-9]/g, ""), 10);
-}
-
-/** "4/7" | "04/06" → "2026-04-07" */
-function parseDate(mmdd: string): string {
-  const [m, d] = mmdd.trim().split("/");
-  const year = new Date().getFullYear();
-  return `${year}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-}
-
-function parseHyundai(text: string): Parsed | null {
-  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-
-  const amountMatch = text.match(/([\d,]+)원/);
-  const dateMatch   = text.match(/(\d{1,2}\/\d{1,2})\s+\d{2}:\d{2}/);
-  if (!amountMatch || !dateMatch) return null;
-
-  let merchant: string;
-
-  // SMS 형식: [Web발신] 포함 → 날짜 다음 줄이 가맹점
-  // "[Web발신]\n현대카드MM 승인\n함*영\n9,712원 일시불\n04/07 15:29\n교보문고\n누적..."
-  if (text.includes("[Web발신]")) {
-    const dateLine = lines.findIndex(l => /^\d{2}\/\d{2}\s+\d{2}:\d{2}$/.test(l));
-    if (dateLine === -1 || dateLine + 1 >= lines.length) return null;
-    merchant = lines[dateLine + 1];
-  } else {
-    // 앱 알림 형식: 마지막 줄이 가맹점
-    // "함다영 님, 현대카드MM 승인\n13,200원 일시불, 4/7 14:07\n메가엠지씨커피응암이마트점"
-    merchant = lines[lines.length - 1];
-  }
-
-  if (!merchant) return null;
-
-  return {
-    amount:         parseAmount(amountMatch[1]),
-    merchant,
-    date:           parseDate(dateMatch[1]),
-    payment_method: "현대카드",
-  };
-}
-
-function parseWoori(text: string): Parsed | null {
-  // [일시불.승인(0157)]04/06 23:15\n5,080원 / 누적:1,493,167원\n쿠팡(쿠페이)
-  const dateMatch   = text.match(/\](\d{2}\/\d{2})\s+\d{2}:\d{2}/);
-  const amountMatch = text.match(/([\d,]+)원\s*\//);
-  const lines       = text.split("\n");
-  const merchant    = lines[lines.length - 1].trim();
-
-  if (!amountMatch || !dateMatch || !merchant) return null;
-
-  return {
-    amount:         parseAmount(amountMatch[1]),
-    merchant,
-    date:           parseDate(dateMatch[1]),
-    payment_method: "우리카드",
-  };
-}
-
-function parse(raw: string): Parsed {
-  const text = raw.trim();
-
-  if (text.includes("현대카드")) {
-    const result = parseHyundai(text);
-    if (result) return result;
-  }
-
-  if (text.includes("일시불.승인") || text.includes("우리카드")) {
-    const result = parseWoori(text);
-    if (result) return result;
-  }
-
-  throw new Error("지원하지 않는 카드 알림 형식입니다.");
-}
-
-// ── 핸들러 ────────────────────────────────────────────────────────────────────
+const MAX_RAW_TEXT = 4 * 1024; // 4KB
+const MAX_AMOUNT = 999_999_999;
 
 export async function POST(req: NextRequest) {
-  let raw_text: string;
+  // 1. 인증
+  const auth = requireBearer(req, process.env.BUDGET_SMS_SECRET);
+  if (!auth.ok) return auth.response;
 
+  // 2. rate limit
+  const limit = await checkBudgetSmsLimit();
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded" },
+      { status: 429, headers: { "retry-after": String(limit.retryAfter) } }
+    );
+  }
+
+  // 3. 입력 파싱 + 길이 제한
+  let raw_text: string;
+  let smsDateMs: number | undefined;
   try {
     const body = await req.json();
     raw_text = body?.raw_text;
     if (typeof raw_text !== "string" || !raw_text.trim()) {
-      return NextResponse.json({ ok: false, error: "raw_text가 필요합니다." }, { status: 400 });
+      return NextResponse.json({ error: "raw_text가 필요합니다" }, { status: 400 });
     }
+    if (raw_text.length > MAX_RAW_TEXT) {
+      return NextResponse.json({ error: "raw_text 4KB 초과" }, { status: 400 });
+    }
+    if (typeof body?.sms_date_ms === "number") smsDateMs = body.sms_date_ms;
   } catch {
-    return NextResponse.json({ ok: false, error: "JSON 파싱 실패" }, { status: 400 });
+    return NextResponse.json({ error: "JSON 파싱 실패" }, { status: 400 });
   }
 
-  let parsed: Parsed;
-  try {
-    parsed = parse(raw_text);
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 422 });
+  // 4. SMS 날짜 (poll.sh가 보내준 게 있으면 사용, 없으면 현재 시각)
+  const smsDate = smsDateMs ? new Date(smsDateMs) : new Date();
+
+  // 5. 카드 파서
+  const parsed = parse(raw_text, smsDate);
+  if (!parsed) {
+    return NextResponse.json({ error: "지원하지 않는 카드 알림 형식" }, { status: 422 });
+  }
+  if (!Number.isInteger(parsed.amount) || parsed.amount <= 0 || parsed.amount > MAX_AMOUNT) {
+    return NextResponse.json({ error: "잘못된 금액" }, { status: 422 });
   }
 
-  const supabase = getSupabase();
+  // 6. 사전 조회 + INSERT
+  // budget_entries엔 user_id 컬럼이 없음 (단일 사용자 앱). INSERT payload에도 없음.
+  // merchant_category_map 조회는 user_id 매칭 필요 (RLS).
+  const userId = process.env.DEFAULT_USER_ID!;
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  const category = await lookupCategory(supabase, userId, parsed.merchant);
+
   const { data, error } = await supabase
     .from("budget_entries")
     .insert({
-      amount:         parsed.amount,
-      memo:           parsed.merchant,
-      date:           parsed.date,
+      date: parsed.date,
+      amount: parsed.amount,
+      memo: parsed.merchant,
       payment_method: parsed.payment_method,
-      category:       "미분류",
+      category,
+      type: "expense",
     })
-    .select()
+    .select("id")
     .single();
 
   if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    if (error.code === "23505") {
+      // UNIQUE 충돌 = 이미 처리된 결제. 정상 흐름의 일부.
+      return NextResponse.json({ ok: true, duplicate: true }, { status: 409 });
+    }
+    console.error("/api/budget/auto insert:", error.message);
+    return NextResponse.json({ error: "Insert failed" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, entry: data });
+  return NextResponse.json({ ok: true, entry: data, category }, { status: 201 });
 }
