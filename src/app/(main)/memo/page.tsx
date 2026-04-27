@@ -1,32 +1,40 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { getAllMemos, getInboxCount, getInboxItems } from "@/lib/memo/list";
+import { getAllMemos } from "@/lib/memo/list";
+import { getCurationItems, getCategoryCounts, type CurationFilter, type CurationItem } from "@/lib/curation/data";
+import { isCurationCategory } from "@/lib/curation/categories";
 import { MemoTab } from "./MemoTab";
-import { InboxButton } from "./InboxButton";
-import { MemoCurationPlaceholder } from "./MemoCurationPlaceholder";
+import { CurationTab } from "./curation/CurationTab";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = Promise<{ tab?: string }>;
+type SearchParams = Promise<{ tab?: string; cat?: string }>;
 
 export default async function MemoPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const activeTab = params.tab === "curation" ? "curation" : "memo";
 
-  const [memos, inboxCount, inboxItems] = await Promise.all([
-    activeTab === "memo" ? getAllMemos() : Promise.resolve([]),
-    getInboxCount(),
-    activeTab === "memo" ? getInboxItems() : Promise.resolve([]),
-  ]);
+  const memos = activeTab === "memo" ? await getAllMemos() : [];
+
+  let curationItems: CurationItem[] = [];
+  let curationCounts: Record<CurationFilter, number> | null = null;
+  let activeFilter: CurationFilter = "all";
+
+  if (activeTab === "curation") {
+    if (params.cat === "dead-letter") activeFilter = "dead-letter";
+    else if (params.cat && isCurationCategory(params.cat)) activeFilter = params.cat;
+
+    [curationItems, curationCounts] = await Promise.all([
+      getCurationItems(activeFilter),
+      getCategoryCounts(),
+    ]);
+  }
 
   return (
     <div className="pb-24">
       {/* 헤더 */}
-      <div className="bg-surface px-4 pt-5 pb-3 border-b border-hair-light flex items-center justify-between">
+      <div className="bg-surface px-4 pt-5 pb-3 border-b border-hair-light">
         <h1 className="text-[18px] font-extrabold tracking-tight">메모</h1>
-        <Suspense fallback={null}>
-          <InboxButton count={inboxCount} items={inboxItems} />
-        </Suspense>
       </div>
 
       {/* 탭 헤더 */}
@@ -59,9 +67,13 @@ export default async function MemoPage({ searchParams }: { searchParams: SearchP
         <Suspense fallback={null}>
           <MemoTab memos={memos} />
         </Suspense>
-      ) : (
-        <MemoCurationPlaceholder />
-      )}
+      ) : curationCounts ? (
+        <CurationTab
+          items={curationItems}
+          counts={curationCounts}
+          activeFilter={activeFilter}
+        />
+      ) : null}
     </div>
   );
 }

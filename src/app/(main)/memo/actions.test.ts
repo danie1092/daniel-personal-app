@@ -14,7 +14,7 @@ vi.mock("@/lib/auth/requireSession", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: revalidatePathMock }));
 
-import { createMemo, updateMemo, deleteMemo, saveInboxGroups } from "./actions";
+import { createMemo, updateMemo, deleteMemo } from "./actions";
 
 function authed() {
   requireSessionMock.mockResolvedValue({ ok: true, user: { id: "u1" } });
@@ -63,6 +63,24 @@ describe("createMemo", () => {
   });
 });
 
+describe("updateMemo", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  test("미인증 거부", async () => {
+    unauthed();
+    const r = await updateMemo("m1", { content: "x", tag: "발견" });
+    expect(r.ok).toBe(false);
+  });
+
+  test("정상 update", async () => {
+    authed();
+    const eqMock = vi.fn(() => Promise.resolve({ error: null }));
+    fromMock.mockReturnValue({ update: vi.fn(() => ({ eq: eqMock })) });
+    const r = await updateMemo("m1", { content: "새 내용", tag: "발견" });
+    expect(r.ok).toBe(true);
+  });
+});
+
 describe("deleteMemo", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -78,42 +96,5 @@ describe("deleteMemo", () => {
     fromMock.mockReturnValue({ delete: vi.fn(() => ({ eq: eqMock })) });
     const r = await deleteMemo("m1");
     expect(r.ok).toBe(true);
-  });
-});
-
-describe("saveInboxGroups", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  test("미인증 거부", async () => {
-    unauthed();
-    const r = await saveInboxGroups([{ tag: "발견", content: "x", item_ids: ["i1"], topic: "t" }]);
-    expect(r.ok).toBe(false);
-  });
-
-  test("빈 그룹 거부", async () => {
-    authed();
-    const r = await saveInboxGroups([]);
-    expect(r.ok).toBe(false);
-  });
-
-  test("정상 저장 → memo insert + collected_items update + revalidate", async () => {
-    authed();
-    const insertMock = vi.fn(() => Promise.resolve({ error: null }));
-    const updateInMock = vi.fn(() => Promise.resolve({ error: null }));
-    const updateMock = vi.fn(() => ({ in: updateInMock }));
-    fromMock
-      .mockReturnValueOnce({ insert: insertMock })       // memo_entries
-      .mockReturnValueOnce({ update: updateMock });      // collected_items
-    const r = await saveInboxGroups([
-      { tag: "발견", content: "x", item_ids: ["i1", "i2"], topic: "t1" },
-      { tag: "생각중", content: "y", item_ids: ["i3"], topic: "t2" },
-    ]);
-    expect(r.ok).toBe(true);
-    expect(insertMock).toHaveBeenCalledWith([
-      { content: "x", tag: "발견" },
-      { content: "y", tag: "생각중" },
-    ]);
-    expect(updateMock).toHaveBeenCalledWith({ is_processed: true });
-    expect(updateInMock).toHaveBeenCalledWith("id", ["i1", "i2", "i3"]);
   });
 });
