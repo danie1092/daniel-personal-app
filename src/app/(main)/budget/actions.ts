@@ -94,7 +94,20 @@ export async function updateBudgetEntry(id: string, input: EntryInput): Promise<
 
   try {
     const supabase = await createClient();
-    const { error } = await supabase
+    const userId = session.user.id;
+
+    // 1) 현재 카테고리 조회 (학습 트리거 판정용)
+    const { data: current, error: selErr } = await supabase
+      .from("budget_entries")
+      .select("category, memo")
+      .eq("id", id)
+      .single();
+    if (selErr || !current) return { ok: false, error: "Not found" };
+
+    const prevCategory = (current as { category: string }).category;
+
+    // 2) entry 본인 update
+    const { error: updErr } = await supabase
       .from("budget_entries")
       .update({
         date: input.date,
@@ -107,7 +120,39 @@ export async function updateBudgetEntry(id: string, input: EntryInput): Promise<
       })
       .eq("id", id);
 
-    if (error) return { ok: false, error: "Update failed" };
+    if (updErr) return { ok: false, error: "Update failed" };
+
+    // 3) 학습 트리거: 미분류 → 다른 카테고리로 변경된 경우만
+    const shouldLearn =
+      prevCategory === "미분류" &&
+      input.category !== "미분류" &&
+      typeof input.memo === "string" &&
+      input.memo.length > 0;
+
+    if (shouldLearn) {
+      // 3-1) 사전 upsert
+      const { error: upsertErr } = await supabase
+        .from("merchant_category_map")
+        .upsert(
+          { user_id: userId, merchant: input.memo, category: input.category },
+          { onConflict: "user_id,merchant" }
+        );
+      if (upsertErr) {
+        console.error("merchant_category_map upsert:", upsertErr.message);
+      }
+
+      // 3-2) 같은 merchant + 미분류 entries 일괄 update
+      // budget_entries에 user_id 컬럼이 없으므로 user 매칭 X (단일 사용자 앱)
+      const { error: bulkErr } = await supabase
+        .from("budget_entries")
+        .update({ category: input.category, type: entryType(input.category) })
+        .eq("memo", input.memo)
+        .eq("category", "미분류");
+      if (bulkErr) {
+        console.error("budget bulk update:", bulkErr.message);
+      }
+    }
+
     revalidatePath("/budget");
     revalidatePath("/home");
     return { ok: true };
