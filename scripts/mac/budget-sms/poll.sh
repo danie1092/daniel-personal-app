@@ -63,7 +63,8 @@ echo "$ROWS" | while IFS='|' read -r rowid msg_date_ns rest; do
   sms_date_ms=$(( (msg_date_ns / 1000000) + 978307200000 ))
 
   # POST
-  http_code=$(curl -sS -o /tmp/budget-sms-resp.txt -w "%{http_code}" \
+  # -D로 헤더를 별도 파일에 dump (retry-after 파싱 위해). -o는 body만 받음.
+  http_code=$(curl -sS -D /tmp/budget-sms-headers.txt -o /tmp/budget-sms-resp.txt -w "%{http_code}" \
     -X POST "$API_URL" \
     -H "Authorization: Bearer $BUDGET_SMS_SECRET" \
     -H "Content-Type: application/json" \
@@ -103,8 +104,8 @@ echo "$ROWS" | while IFS='|' read -r rowid msg_date_ns rest; do
       exit 1
       ;;
     429)
-      # rate limit → retry-after 따라 sleep, state 진행 안 함
-      retry=$(grep -i 'retry-after' /tmp/budget-sms-resp.txt | awk '{print $2}' | tr -d '\r' || echo 60)
+      # rate limit → retry-after(헤더) 따라 sleep, state 진행 안 함
+      retry=$(grep -i '^retry-after:' /tmp/budget-sms-headers.txt | awk '{print $2}' | tr -d '\r')
       sleep "${retry:-60}" || true
       # 다음 폴링에서 재시도
       ;;
