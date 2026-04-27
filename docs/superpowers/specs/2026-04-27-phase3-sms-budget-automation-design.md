@@ -42,7 +42,7 @@
 7. **자동 학습 트리거**: 가계부 페이지의 `updateCategory` Server Action에서 미분류 → 카테고리 변경 시 ① `merchant_category_map` upsert ② 같은 user + merchant + `category="미분류"` 상태인 다른 entries 일괄 update.
 8. **연도 결정**: chat.db `message.date`(Apple epoch ns, 2001-01-01 기준) → KST 변환 → 그 시점의 YYYY 사용.
 9. **중복 방지**: API 측에 `(user_id, date, amount, merchant, payment_method)` UNIQUE 제약. state.txt 유실 시 재처리해도 DB가 막음.
-10. **파서 분리**: 단일 파일 → `src/lib/budget/parsers/{hyundai,woori,hana}.ts` + `index.ts`(라우트 함수). 카드 추가 시 파서 1개 + 라우트 1줄만 수정.
+10. **파서 분리**: 단일 파일 → `src/lib/budget/parsers/{hyundai,woori}.ts` + `index.ts`(라우트 함수). 카드 추가 시 파서 1개 + parsers 배열 1줄만 수정. 하나체크카드(`hana.ts`)는 사용자가 SMS 신청 후 별도 후속 작업으로 추가.
 11. **raw_text 길이 제한**: 4KB 초과 시 400 반환. 정규식 backtracking 방어 + 메모리/CPU 폭주 차단.
 12. **로그 위생**: `failed-parses.log` / `failed-network.log` 모두 mode 600. 100KB 도달 시 `*.1`로 회전, 최대 5개 보존, 그 이후는 폐기. SMS 본문엔 카드번호 끝 4자리 / 누적 결제액이 포함되므로 평문 보호 필요.
 13. **macOS 알림 위생**: 401 시 `osascript display notification` 본문에 fixed string만(예: `"BUDGET_SMS_SECRET 인증 실패 — secret 확인 필요"`). raw_text / secret / 응답 body 절대 포함 금지.
@@ -149,7 +149,7 @@ ALTER TABLE budget_entries
 | `src/lib/auth/requireBudgetSecret.ts` | **신규**. Phase 0의 `requireCronSecret`을 일반화한 `requireSecret(req, envName)` 헬퍼를 두고 wrapper 2개로 분기하는 게 자연스러움 — Phase 0 재구성도 함께 |
 | `src/lib/budget/parsers/hyundai.ts` | 기존 `parseHyundai` 이전 |
 | `src/lib/budget/parsers/woori.ts` | 기존 `parseWoori` 이전 |
-| `src/lib/budget/parsers/hana.ts` | **신규**. 사용자가 SMS 샘플 1~2개 제공 후 작성 |
+| ~~`src/lib/budget/parsers/hana.ts`~~ | **후속 작업** (사용자가 하나체크카드 SMS 신청 후 raw 1~2개 받아 추가) |
 | `src/lib/budget/parsers/index.ts` | `parsers: ((text: string, smsDate: Date) => Parsed \| null)[]` 배열, `parse()` 함수 |
 | `src/lib/budget/categorize.ts` | `lookupCategory(supabase, userId, merchant): Promise<string>`. 미스 시 `"미분류"` |
 | `src/lib/budget/types.ts` | `Parsed = { amount, merchant, date, payment_method }` |
@@ -226,9 +226,16 @@ ALTER TABLE budget_entries
 
 ## 오픈 이슈 (Plan 단계에서 해결)
 
-1. **하나체크카드 SMS 샘플** — 사용자가 plan 작성 시 1~2개 raw 텍스트 첨부. 그 형식 보고 `hana.ts` 파서 작성.
-2. **`requireCronSecret` 일반화 여부** — Phase 0 헬퍼를 그대로 두고 `requireBudgetSecret`을 별도로 만들지, `requireSecret(envName)`로 일반화할지. plan 단계에서 코드 보고 결정.
-3. **`BUDGET_SMS_USER_ID` 부트스트랩** — 사용자의 Supabase user uuid를 어떻게 얻을지. supabase dashboard에서 직접 복사하는 절차를 README에 명시.
-4. **시간대 변환 정확도** — chat.db `message.date`는 nanoseconds since 2001-01-01 UTC (Apple epoch). poll.sh에서 sqlite3가 직접 변환할지, raw_text와 함께 ISO timestamp를 별도 필드로 보낼지.
-5. **Rate limit 위치 확정** — Phase 0 / Phase 2의 rate limit이 secret 체크 전후 어디서 적용되는지 코드 확인 후 일치/보정. secret 모르는 봇이 401 폭탄 시에도 invocations 소모 안 되도록 secret 체크 이전 단으로 통일.
-6. **`secret.env` 백업 제외 경로** — `~/.config/budget-sms/`는 Time Machine 기본 백업 대상. `tmutil addexclusion` 또는 `~/Library/Application Support/budget-sms/`(백업 제외 경로) 중 어디로 둘지 결정. 사용자 환경 확인 후.
+1. **시간대 변환 정확도** — chat.db `message.date`는 nanoseconds since 2001-01-01 UTC (Apple epoch). poll.sh에서 sqlite3가 직접 변환할지, raw_text와 함께 ISO timestamp를 별도 필드로 보낼지.
+2. **`secret.env` 백업 제외 경로** — `~/.config/budget-sms/`는 Time Machine 기본 백업 대상. `tmutil addexclusion` 또는 `~/Library/Application Support/budget-sms/`(백업 제외 경로) 중 어디로 둘지 결정.
+
+### 코드 확인으로 해결된 이슈 (Plan 진입 시점)
+
+- ~~`requireCronSecret` 일반화 여부~~ → `requireBearer(req, expected)` 헬퍼가 이미 일반화돼 있음. `requireBearer(req, process.env.BUDGET_SMS_SECRET)` 그대로 사용.
+- ~~`BUDGET_SMS_USER_ID` 부트스트랩~~ → `DEFAULT_USER_ID` 환경변수 이미 존재 (`/api/collect`에서 사용 중). 별도 변수 신설 없이 재사용.
+- ~~Rate limit 위치 확정~~ → 기존 `/api/collect` 패턴 = secret → rate limit 순서. 일관성 위해 동일 순서. 401 봇 폭탄에 대한 invocations 소모 위험은 runbook의 secret 로테이션 절차로 대응.
+
+## 후속 작업 (Phase 3 이후)
+
+1. **하나체크카드 파서** — 사용자가 하나체크카드 SMS 알림을 신청한 후 raw 1~2개를 받아 `src/lib/budget/parsers/hana.ts` 추가 + `parsers/index.ts`의 배열에 등록 + 단위 테스트. 5분짜리 작업.
+2. **새 카드 추가 일반 절차** — runbook(`docs/operations/budget-sms-runbook.md`)에 절차 명시.
