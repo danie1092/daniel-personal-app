@@ -62,3 +62,13 @@ describe("checkCollectLimit", () => {
     expect(r.ok).toBe(true);
   });
 });
+
+describe("checkBudgetSmsLimit", () => {
+  test("env 미설정 시 fail-open", async () => {
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    const { checkBudgetSmsLimit } = await import("./upstash");
+    const result = await checkBudgetSmsLimit();
+    expect(result).toEqual({ ok: true });
+  });
+});
