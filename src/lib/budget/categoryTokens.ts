@@ -25,6 +25,7 @@ export const CATEGORY_TOKENS: Record<BudgetCategory, CategoryToken> = {
   도파민:  { emoji: "💸", bg: "bg-rose-50",    text: "text-rose-700",    hex: "#E11D48" },
   월급:    { emoji: "💰", bg: "bg-green-50",   text: "text-green-700",   hex: "#16A34A" },
   저축:    { emoji: "🏦", bg: "bg-sky-50",     text: "text-sky-700",     hex: "#0284C7" },
+  미분류:  { emoji: "❔", bg: "bg-zinc-100",   text: "text-zinc-600",    hex: "#71717A" },
 };
 
 export function entryType(category: BudgetCategory): "income" | "saving" | "expense" {
