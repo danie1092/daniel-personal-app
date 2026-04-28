@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { BUDGET_CATEGORIES, PAYMENT_METHODS } from "@/lib/constants";
 import type { BudgetEntry } from "@/lib/budget/monthData";
 import { CATEGORY_TOKENS, NO_PAYMENT_CATEGORIES, type BudgetCategory } from "@/lib/budget/categoryTokens";
@@ -22,6 +22,16 @@ export function EntryEditSheet({ entry, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const noPayment = NO_PAYMENT_CATEGORIES.has(category);
+
+  // Lock body scroll while sheet is open so swipe-up gestures don't bleed
+  // through to the page underneath (iOS Safari scroll chaining).
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   function handleSave() {
     setError(null);
@@ -61,15 +71,15 @@ export function EntryEditSheet({ entry, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col">
+    <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative mt-auto bg-surface rounded-t-sheet max-h-[85vh] flex flex-col animate-slide-up">
+      <div className="absolute inset-x-0 bottom-0 bg-surface rounded-t-sheet max-h-[85dvh] flex flex-col animate-slide-up">
         <div className="flex items-center justify-between px-4 py-3 border-b border-hair-light">
           <h2 className="text-[16px] font-bold">항목 수정</h2>
           <button onClick={onClose} className="text-[13px] text-ink-sub">닫기</button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 flex flex-col gap-3">
           <div>
             <label className="text-[10px] font-extrabold tracking-wider text-ink-sub uppercase">금액</label>
             <input
@@ -159,7 +169,7 @@ export function EntryEditSheet({ entry, onClose }: Props) {
           {error && <p className="text-[12px] text-danger">{error}</p>}
         </div>
 
-        <div className="px-4 py-3 border-t border-hair-light flex gap-2">
+        <div className="px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-hair-light flex gap-2">
           <button
             onClick={handleDelete}
             disabled={pending}
