@@ -27,7 +27,7 @@ export function SummaryTab({ summary, breakdown }: Props) {
         ) : (
           <div className="flex flex-col gap-2.5">
             {breakdown.map((b) => {
-              const tok = CATEGORY_TOKENS[b.category as BudgetCategory];
+              const tok = CATEGORY_TOKENS[b.category as BudgetCategory] ?? CATEGORY_TOKENS.미분류;
               const widthPct = maxAmount > 0 ? (b.amount / maxAmount) * 100 : 0;
               return (
                 <div key={b.category}>
