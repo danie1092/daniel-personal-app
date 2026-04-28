@@ -12,6 +12,7 @@ export const BUDGET_CATEGORIES = [
   "도파민",
   "월급",
   "저축",
+  "미분류",
 ] as const;
 
 export const PAYMENT_METHODS = [

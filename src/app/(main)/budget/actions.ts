@@ -123,10 +123,9 @@ export async function updateBudgetEntry(id: string, input: EntryInput): Promise<
     if (updErr) return { ok: false, error: "Update failed" };
 
     // 3) 학습 트리거: 미분류 → 분류된 카테고리로 변경된 경우만.
-    // BUDGET_CATEGORIES엔 "미분류"가 없어서 input.category는 항상 분류된 값.
-    // (UI에서도 "미분류" 선택 불가) → prev만 체크하면 충분.
     const shouldLearn =
       prevCategory === "미분류" &&
+      input.category !== "미분류" &&
       typeof input.memo === "string" &&
       input.memo.length > 0;
 
