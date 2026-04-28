@@ -71,15 +71,15 @@ export function EntryEditSheet({ entry, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-[60] overflow-hidden">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="absolute inset-x-0 bottom-0 bg-surface rounded-t-sheet max-h-[85dvh] flex flex-col animate-slide-up">
+      <div className="absolute inset-x-0 bottom-0 bg-surface rounded-t-sheet max-h-[85dvh] flex flex-col overflow-hidden animate-slide-up">
         <div className="flex items-center justify-between px-4 py-3 border-b border-hair-light">
           <h2 className="text-[16px] font-bold">항목 수정</h2>
           <button onClick={onClose} className="text-[13px] text-ink-sub">닫기</button>
         </div>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 flex flex-col gap-3">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-3 flex flex-col gap-3">
           <div>
             <label className="text-[10px] font-extrabold tracking-wider text-ink-sub uppercase">금액</label>
             <input
