@@ -1,27 +1,19 @@
 "use client";
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { BUDGET_CATEGORIES } from "@/lib/constants";
 
 const FILTERED_CATEGORIES = BUDGET_CATEGORIES.filter((c) => c !== "월급" && c !== "저축");
 
-export function DetailsFilter({ active }: { active: string | null }) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
+type Props = {
+  active: string | null;
+  onChange: (cat: string | null) => void;
+};
 
-  function go(cat: string | null) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (cat) params.set("cat", cat);
-    else params.delete("cat");
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname);
-  }
-
+export function DetailsFilter({ active, onChange }: Props) {
   return (
     <div className="flex gap-1.5 px-4 py-2 overflow-x-auto scrollbar-hide">
       <button
-        onClick={() => go(null)}
+        onClick={() => onChange(null)}
         className={
           active === null
             ? "flex-shrink-0 px-3 py-1.5 rounded-chip bg-ink text-white text-[12px] font-bold"
@@ -35,7 +27,7 @@ export function DetailsFilter({ active }: { active: string | null }) {
         return (
           <button
             key={c}
-            onClick={() => go(c)}
+            onClick={() => onChange(c)}
             className={
               isActive
                 ? "flex-shrink-0 px-3 py-1.5 rounded-chip bg-ink text-white text-[12px] font-bold"

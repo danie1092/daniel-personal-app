@@ -23,7 +23,6 @@ const YM_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 type SearchParams = Promise<{
   ym?: string;
   tab?: string;
-  cat?: string;
 }>;
 
 export default async function BudgetPage({ searchParams }: { searchParams: SearchParams }) {
@@ -32,7 +31,6 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
   const rawTab = params.tab;
   const tab: BudgetTab =
     rawTab === "input" || rawTab === "summary" ? rawTab : "details";
-  const cat = params.cat ?? null;
 
   const [entries, summary, breakdown] = await Promise.all([
     tab === "summary" ? Promise.resolve([]) : getMonthEntries(yearMonth),
@@ -57,7 +55,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
 
       {tab === "details" && (
         <Suspense fallback={null}>
-          <DetailsTab entries={entries} summary={summary} filter={cat} todayStr={todayStr()} />
+          <DetailsTab entries={entries} summary={summary} todayStr={todayStr()} />
         </Suspense>
       )}
       {tab === "input" && (

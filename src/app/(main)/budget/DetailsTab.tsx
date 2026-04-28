@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import type { BudgetEntry, MonthSummary } from "@/lib/budget/monthData";
 import { DetailsFilter } from "./DetailsFilter";
@@ -32,11 +35,13 @@ function getSpendingComment(amount: number, budget: number): string {
 type Props = {
   entries: BudgetEntry[];
   summary: MonthSummary;
-  filter: string | null;
   todayStr: string;
 };
 
-export function DetailsTab({ entries, summary, filter, todayStr }: Props) {
+export function DetailsTab({ entries, summary, todayStr }: Props) {
+  // Category filter is purely client-side: clicking chips re-filters the
+  // already-loaded `entries` array instead of triggering a server round-trip.
+  const [filter, setFilter] = useState<string | null>(null);
   const visible = filter ? entries.filter((e) => e.category === filter) : entries;
 
   const groups = new Map<string, BudgetEntry[]>();
@@ -94,7 +99,7 @@ export function DetailsTab({ entries, summary, filter, todayStr }: Props) {
       </div>
 
       <div className="bg-surface">
-        <DetailsFilter active={filter} />
+        <DetailsFilter active={filter} onChange={setFilter} />
       </div>
 
       <div className="bg-surface px-4">
