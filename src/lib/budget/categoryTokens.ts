@@ -14,6 +14,7 @@ export type CategoryToken = {
 export const CATEGORY_TOKENS: Record<BudgetCategory, CategoryToken> = {
   고정지출: { emoji: "📌", bg: "bg-violet-50",  text: "text-violet-700",  hex: "#7C3AED" },
   할부:    { emoji: "💳", bg: "bg-purple-50",  text: "text-purple-700",  hex: "#9333EA" },
+  구독:    { emoji: "📺", bg: "bg-cyan-50",    text: "text-cyan-700",    hex: "#0891B2" },
   식사:    { emoji: "🍚", bg: "bg-emerald-50", text: "text-emerald-700", hex: "#059669" },
   카페:    { emoji: "☕", bg: "bg-orange-50",  text: "text-orange-700",  hex: "#EA580C" },
   간식:    { emoji: "🍪", bg: "bg-amber-50",   text: "text-amber-700",   hex: "#D97706" },

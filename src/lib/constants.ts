@@ -1,6 +1,7 @@
 export const BUDGET_CATEGORIES = [
   "고정지출",
   "할부",
+  "구독",
   "식사",
   "카페",
   "간식",

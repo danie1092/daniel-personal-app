@@ -7,7 +7,7 @@ import { EntryEditSheet } from "./EntryEditSheet";
 
 export function EntryRow({ entry }: { entry: BudgetEntry }) {
   const [open, setOpen] = useState(false);
-  const tok = CATEGORY_TOKENS[entry.category as BudgetCategory];
+  const tok = CATEGORY_TOKENS[entry.category as BudgetCategory] ?? CATEGORY_TOKENS.미분류;
   const isIncome = entry.type === "income";
   const time = new Date(entry.created_at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
 
