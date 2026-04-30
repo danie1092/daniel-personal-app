@@ -3,9 +3,9 @@
 이지은 — 다영의 텔레그램 에이전트.
 
 ## 운영
-- 시작: `launchctl load launchd/kr.daniel.jieun.plist`
-- 중지: `launchctl unload launchd/kr.daniel.jieun.plist`
-- 로그: `tail -f logs/bot.log`
+- 시작: `launchctl load -w /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot/launchd/kr.daniel.jieun.plist`
+- 중지: `launchctl unload -w /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot/launchd/kr.daniel.jieun.plist`
+- 로그: `tail -f /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot/logs/bot.log`
 - 인증 갱신: `claude login` (Max 구독 — 토큰 만료 시 봇이 텔레그램으로 알림)
 
 ## 개발

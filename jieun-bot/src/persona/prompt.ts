@@ -1,4 +1,10 @@
-export type Trigger = "schedule" | "event" | "user" | "latent";
+import type { Trigger as DbTrigger } from "../db/conversations.js";
+
+/**
+ * Triggers that the prompt builder handles. Excludes "system" — system messages
+ * never invoke Claude (they're direct fallbacks like "claude login 확인" notifications).
+ */
+export type Trigger = Exclude<DbTrigger, "system">;
 
 export type PromptInput = {
   trigger: Trigger;
