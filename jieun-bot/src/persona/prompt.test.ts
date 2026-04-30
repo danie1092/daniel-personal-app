@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildSystemPrompt } from "./prompt.js";
 
 describe("buildSystemPrompt", () => {
-  it("includes core 5 tone rules", () => {
+  it("includes core persona rules", () => {
     const p = buildSystemPrompt({
       trigger: "user",
       now: new Date("2026-04-30T12:30:00+09:00"),
@@ -14,7 +14,8 @@ describe("buildSystemPrompt", () => {
     expect(p).toMatch(/다영/);
     expect(p).toMatch(/일반 발화: 5문장 이내/);
     expect(p).toMatch(/회고 대화: 10문장 이내/);
-    expect(p).toMatch(/판단 X.*관찰 O/s);
+    expect(p).toMatch(/너는 챗봇이 아니다/);
+    expect(p).toMatch(/감정 해석하지 마/);
   });
 
   it("embeds trigger label", () => {
