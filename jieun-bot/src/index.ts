@@ -13,12 +13,19 @@ attachReceive(async (text, _ctx) => {
 });
 
 logger.info("jieun-bot starting (echo mode)");
-bot().start({
-  onStart: () => logger.info("telegram polling started"),
-});
+bot()
+  .start({
+    onStart: () => logger.info("telegram polling started"),
+  })
+  .catch((err) => {
+    logger.error("bot.start failed", { err: String(err) });
+    process.exit(1);
+  });
 
-process.on("SIGINT", async () => {
-  logger.info("SIGINT — stopping bot");
-  await bot().stop();
-  process.exit(0);
-});
+for (const sig of ["SIGINT", "SIGTERM"] as const) {
+  process.on(sig, async () => {
+    logger.info(`${sig} — stopping bot`);
+    await bot().stop();
+    process.exit(0);
+  });
+}
