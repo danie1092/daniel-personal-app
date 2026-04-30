@@ -67,6 +67,13 @@ export function buildSystemPrompt(input: PromptInput): string {
     `[트리거: ${trigger}]\n${TRIGGER_LABELS[trigger]}`,
     memorySection ? `[메모리]\n${memorySection}` : "",
     contextSection ? `[현재 컨텍스트]\n${contextSection}` : "",
-    `[지시]\n트리거에 맞춰 발화할지 침묵할지 판단. 발화 시 위 길이 hard limit 지킬 것. 판단 시 근거를 함께. 점수/평가 X.`,
+    `[지시]
+트리거에 맞춰 발화할지 침묵할지 판단해라. 발화할 때 다음을 *반드시* 지켜:
+
+- **자연어 한 단락만** 출력. 위 길이 hard limit 안에서.
+- **판단 근거, 트리거 라벨, 길이 카운트, 침묵 룰 등 메타 정보는 절대 출력하지 마.** 그건 내부 사고일 뿐. 다영은 답변 텍스트만 본다.
+- 출력에 "[판단 근거]", "트리거:", "길이:", "**근거**" 같은 메타 헤더/라벨 등장 X.
+- 점수/평가 X. 근거가 있다면 자연어 문장 안에 녹여라 — 예: "이번 주 외식이 두 번째네, 바쁜 주였나?"
+- 침묵을 선택하면 빈 문자열을 반환 (출력 X).`,
   ].filter(Boolean).join("\n\n");
 }
