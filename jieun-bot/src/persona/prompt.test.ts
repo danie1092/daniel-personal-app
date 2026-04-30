@@ -15,7 +15,7 @@ describe("buildSystemPrompt", () => {
     expect(p).toMatch(/일반 발화: 5문장 이내/);
     expect(p).toMatch(/회고 대화: 10문장 이내/);
     expect(p).toMatch(/너는 챗봇이 아니다/);
-    expect(p).toMatch(/감정 해석하지 마/);
+    expect(p).toMatch(/같이 느끼/);
   });
 
   it("embeds trigger label", () => {
