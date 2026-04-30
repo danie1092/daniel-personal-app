@@ -82,14 +82,21 @@ ALTER TABLE user_profile      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bot_mute_state    ENABLE ROW LEVEL SECURITY;
 
 -- 다영(authenticated)이 앱에서 봐야 함
+DROP POLICY IF EXISTS "auth read" ON bot_conversations;
 CREATE POLICY "auth read" ON bot_conversations FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "auth read" ON bot_writes;
 CREATE POLICY "auth read" ON bot_writes        FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "auth read" ON daily_summary;
 CREATE POLICY "auth read" ON daily_summary     FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "auth read" ON user_profile;
 CREATE POLICY "auth read" ON user_profile      FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "auth read" ON bot_mute_state;
 CREATE POLICY "auth read" ON bot_mute_state    FOR SELECT TO authenticated USING (true);
 -- 다영이 user_profile 라인 직접 삭제 가능 (편향 라인 제거용)
+DROP POLICY IF EXISTS "auth delete" ON user_profile;
 CREATE POLICY "auth delete" ON user_profile    FOR DELETE TO authenticated USING (true);
 -- 다영이 mute 토글 가능 (앱에서 끄기 버튼)
+DROP POLICY IF EXISTS "auth update mute" ON bot_mute_state;
 CREATE POLICY "auth update mute" ON bot_mute_state
   FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 -- bot_signals, weekly_summary는 앱에 노출 X (디버깅 전용)
