@@ -3,20 +3,22 @@
 ## 시작 / 중지
 
 ```bash
-# 빌드 (TS → dist)
-cd jieun-bot && npm run build
+# 빌드 (TS → dist) — 최초 + 코드 변경 시마다
+cd /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot && npm run build
 
-# launchd 등록 + 시작
-launchctl load -w jieun-bot/launchd/kr.daniel.jieun.plist
+# launchd 등록 + 시작 (절대 경로 사용 — 어느 디렉토리에서 실행해도 동작)
+launchctl load -w /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot/launchd/kr.daniel.jieun.plist
 
 # 중지
-launchctl unload -w jieun-bot/launchd/kr.daniel.jieun.plist
+launchctl unload -w /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot/launchd/kr.daniel.jieun.plist
 
-# 재시작 (코드 업데이트 후)
-launchctl unload -w jieun-bot/launchd/kr.daniel.jieun.plist
-cd jieun-bot && npm run build
-launchctl load -w jieun-bot/launchd/kr.daniel.jieun.plist
+# 재시작 (코드 업데이트 후 한 줄로)
+launchctl unload -w /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot/launchd/kr.daniel.jieun.plist && \
+  cd /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot && npm run build && \
+  launchctl load -w /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot/launchd/kr.daniel.jieun.plist
 ```
+
+> ⚠️ `dist/` 폴더가 없으면 launchd가 module-not-found로 무한 재시작함. 첫 `launchctl load` 전에 반드시 `npm run build`.
 
 상태 확인:
 ```bash
@@ -28,11 +30,11 @@ launchctl list | grep jieun
 
 ```bash
 # 봇 자체 로그 (회전, mode 600)
-tail -f jieun-bot/logs/bot.log
+tail -f /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot/logs/bot.log
 
 # launchd가 캡처하는 stdout/stderr
-tail -f jieun-bot/logs/launchd.out.log
-tail -f jieun-bot/logs/launchd.err.log
+tail -f /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot/logs/launchd.out.log
+tail -f /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot/logs/launchd.err.log
 ```
 
 회전 정책: 봇 로그(`bot.log`)는 100KB 도달 시 `.1`~`.5`로 시프트, `.5`는 폐기. launchd가 캡처하는 out/err는 회전 X — 너무 커지면 수동으로 비우거나 logrotate.
