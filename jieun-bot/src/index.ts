@@ -5,20 +5,14 @@ import { Logger } from "./logger.js";
 import { loadEnv } from "./env.js";
 import { buildSystemPrompt } from "./persona/prompt.js";
 import { AgentSdkClaude } from "./claude/agentSdk.js";
-import { recentConversations } from "./db/conversations.js";
+import { loadMemorySection } from "./memory/load.js";
 
 const env = loadEnv();
 const logger = new Logger(env.LOG_DIR, "bot");
 const claude = new AgentSdkClaude();
 
 attachReceive(async (text, _ctx) => {
-  // 최근 24시간 대화 → 메모리 섹션
-  const recent = await recentConversations(24);
-  const memorySection = recent
-    .slice(0, 30)
-    .reverse()
-    .map((c) => `${c.role === "user" ? "다영" : c.role === "bot" ? "이지은" : "[system]"}: ${c.content}`)
-    .join("\n");
+  const memorySection = await loadMemorySection(24);
 
   const systemPrompt = buildSystemPrompt({
     trigger: "user",
