@@ -42,4 +42,12 @@ describe("parseActions", () => {
     expect(r.cleanText).toContain("첫 단락");
     expect(r.cleanText).toContain("둘째 단락");
   });
+
+  it("parses multiple <actions> blocks in one response", () => {
+    const input = `첫째 단락.\n<actions>\n[{"kind":"budget_insert","amount":3000,"category":"식비","memo":"커피","type":"expense","date_offset":0}]\n</actions>\n둘째 단락.\n<actions>\n[{"kind":"budget_insert","amount":7000,"category":"식비","memo":"김밥","type":"expense","date_offset":0}]\n</actions>`;
+    const r = parseActions(input);
+    expect(r.actions).toHaveLength(2);
+    expect(r.cleanText).toBe("첫째 단락.\n\n둘째 단락.");
+    expect(r.cleanText).not.toContain("<actions>");
+  });
 });

@@ -12,8 +12,6 @@ const BudgetInsertSchema = z.object({
 export const ActionSchema = z.discriminatedUnion("kind", [BudgetInsertSchema]);
 export type Action = z.infer<typeof ActionSchema>;
 
-const ACTIONS_BLOCK_RE = /<actions>\s*([\s\S]*?)\s*<\/actions>/;
-
 export type ParseResult = {
   cleanText: string;       // <actions> 블록 제거된 자연어
   actions: Action[];
@@ -21,30 +19,37 @@ export type ParseResult = {
 };
 
 export function parseActions(claudeText: string): ParseResult {
-  const match = claudeText.match(ACTIONS_BLOCK_RE);
-  if (!match) {
+  // Match ALL <actions> blocks (global flag for multi-occurrence)
+  const re = /<actions>\s*([\s\S]*?)\s*<\/actions>/g;
+  const matches = [...claudeText.matchAll(re)];
+
+  if (matches.length === 0) {
     return { cleanText: claudeText.trim(), actions: [] };
   }
 
-  const cleanText = claudeText.replace(ACTIONS_BLOCK_RE, "").trim();
-  const jsonStr = match[1] ?? "";
+  // Strip all blocks from the visible text
+  const cleanText = claudeText.replace(re, "").trim();
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(jsonStr);
-  } catch (err) {
-    return { cleanText, actions: [], parseError: `JSON parse: ${String(err)}` };
-  }
-
-  if (!Array.isArray(parsed)) {
-    return { cleanText, actions: [], parseError: "actions must be an array" };
-  }
-
+  // Parse each block and accumulate
   const actions: Action[] = [];
-  for (const item of parsed) {
-    const r = ActionSchema.safeParse(item);
-    if (r.success) actions.push(r.data);
-    // 잘못된 item은 조용히 건너뜀 (one bad apple ≠ all)
+  let parseError: string | undefined;
+  for (const m of matches) {
+    const jsonStr = m[1] ?? "";
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (err) {
+      parseError = `JSON parse: ${String(err)}`;
+      continue;
+    }
+    if (!Array.isArray(parsed)) {
+      parseError = "actions must be an array";
+      continue;
+    }
+    for (const item of parsed) {
+      const r = ActionSchema.safeParse(item);
+      if (r.success) actions.push(r.data);
+    }
   }
-  return { cleanText, actions };
+  return { cleanText, actions, ...(parseError ? { parseError } : {}) };
 }

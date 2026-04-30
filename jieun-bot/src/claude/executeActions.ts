@@ -7,12 +7,19 @@ import { loadEnv } from "../env.js";
 const logger = new Logger(loadEnv().LOG_DIR, "bot");
 
 function dateForOffset(offset: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  // KST 기준 오늘 + offset일. host TZ 무관.
+  const now = new Date();
+  const offsetMs = offset * 86400 * 1000;
+  const target = new Date(now.getTime() + offsetMs);
+
+  // en-CA + Asia/Seoul yields YYYY-MM-DD format directly
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return fmt.format(target);
 }
 
 /**
@@ -42,6 +49,10 @@ export async function executeActions(actions: Action[]): Promise<void> {
           notes: `${a.memo} ${a.amount.toLocaleString()}원 (${a.category}, ${a.type}, ${date})`,
         });
         logger.info("action: budget_insert", { id: data.id, amount: a.amount, category: a.category });
+      } else {
+        // exhaustive check — ensures TS errors when new Action kinds added without a handler
+        const _exhaustive: never = a.kind;
+        logger.warn("unknown action kind", { kind: (a as { kind: string }).kind });
       }
     } catch (err) {
       logger.error("action failed", { kind: a.kind, err: String(err) });
