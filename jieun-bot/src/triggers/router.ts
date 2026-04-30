@@ -7,6 +7,7 @@ import { Logger } from "../logger.js";
 import { loadEnv } from "../env.js";
 import { parseActions } from "../claude/actions.js";
 import { executeActions } from "../claude/executeActions.js";
+import { isInSilenceWindow } from "./silenceWindow.js";
 
 const logger = new Logger(loadEnv().LOG_DIR, "bot");
 
@@ -29,6 +30,13 @@ export async function runTrigger(
   claude: ClaudeAdapter,
   ctx: TriggerContext
 ): Promise<string> {
+  // user 트리거는 항상 살림 (다영이 새벽에 메시지 보내면 응답)
+  // schedule/event/latent는 자정~07:59 차단
+  if (ctx.trigger !== "user" && isInSilenceWindow()) {
+    logger.info("silenced (window)", { trigger: ctx.trigger });
+    return "";
+  }
+
   const memorySection = await loadMemorySection(24);
   const systemPrompt = buildSystemPrompt({
     trigger: ctx.trigger,
