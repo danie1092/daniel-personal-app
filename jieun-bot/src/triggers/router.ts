@@ -5,6 +5,8 @@ import { sendToOwner } from "../telegram/send.js";
 import { loadMemorySection } from "../memory/load.js";
 import { Logger } from "../logger.js";
 import { loadEnv } from "../env.js";
+import { parseActions } from "../claude/actions.js";
+import { executeActions } from "../claude/executeActions.js";
 
 const logger = new Logger(loadEnv().LOG_DIR, "bot");
 
@@ -38,15 +40,24 @@ export async function runTrigger(
 
   try {
     const result = await claude.ask({ systemPrompt, userPrompt: ctx.userPrompt });
-    if (result.text) {
-      await sendToOwner(result.text, ctx.trigger);
+    const { cleanText, actions, parseError } = parseActions(result.text);
+    if (parseError) {
+      logger.warn("actions parse error", { trigger: ctx.trigger, parseError });
+    }
+    if (cleanText) {
+      await sendToOwner(cleanText, ctx.trigger);
+    }
+    if (actions.length > 0) {
+      await executeActions(actions);
+      logger.info("actions executed", { trigger: ctx.trigger, count: actions.length });
     }
     logger.info("trigger ran", {
       trigger: ctx.trigger,
       durationMs: result.durationMs,
-      hadText: !!result.text,
+      hadText: !!cleanText,
+      actionCount: actions.length,
     });
-    return result.text;
+    return cleanText;
   } catch (err) {
     logger.error("trigger failed", { trigger: ctx.trigger, err: String(err) });
     if (ctx.trigger === "user") {
