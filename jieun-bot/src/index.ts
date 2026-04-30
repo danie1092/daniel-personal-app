@@ -1,37 +1,16 @@
 import { bot } from "./telegram/bot.js";
 import { attachReceive } from "./telegram/receive.js";
-import { sendToOwner } from "./telegram/send.js";
 import { Logger } from "./logger.js";
 import { loadEnv } from "./env.js";
-import { buildSystemPrompt } from "./persona/prompt.js";
 import { AgentSdkClaude } from "./claude/agentSdk.js";
-import { loadMemorySection } from "./memory/load.js";
+import { runTrigger } from "./triggers/router.js";
 
 const env = loadEnv();
 const logger = new Logger(env.LOG_DIR, "bot");
 const claude = new AgentSdkClaude();
 
 attachReceive(async (text, _ctx) => {
-  const memorySection = await loadMemorySection(24);
-
-  const systemPrompt = buildSystemPrompt({
-    trigger: "user",
-    now: new Date(),
-    memorySection,
-    profileSection: "",          // Block 4에서 채움
-    contextSection: "",          // Block 3에서 채움
-  });
-
-  try {
-    const result = await claude.ask({ systemPrompt, userPrompt: text });
-    if (result.text) {
-      await sendToOwner(result.text, "user");
-    }
-    logger.info("claude responded", { durationMs: result.durationMs, hadText: !!result.text });
-  } catch (err) {
-    logger.error("claude failed", { err: String(err) });
-    await sendToOwner("(이지은이 잠깐 막혔어. `claude login` 확인 부탁해.)", "system");
-  }
+  await runTrigger(claude, { trigger: "user", userPrompt: text });
 });
 
 logger.info("jieun-bot starting");
