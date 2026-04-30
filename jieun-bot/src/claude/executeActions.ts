@@ -39,6 +39,7 @@ export async function executeActions(actions: Action[]): Promise<void> {
             memo: a.memo,
             amount: a.amount,
             type: a.type,
+            payment_method: "기타",  // 자연어 발화엔 결제수단 정보 없음 — NOT NULL 충족용 기본값
           })
           .select("id")
           .single();
@@ -55,7 +56,14 @@ export async function executeActions(actions: Action[]): Promise<void> {
         logger.warn("unknown action kind", { kind: (a as { kind: string }).kind });
       }
     } catch (err) {
-      logger.error("action failed", { kind: a.kind, err: String(err) });
+      // err가 Supabase PostgrestError나 일반 Error일 수 있음 — 메시지/코드 추출
+      const errInfo =
+        err instanceof Error
+          ? { message: err.message }
+          : typeof err === "object" && err !== null
+          ? { message: (err as { message?: string }).message ?? "(no message)", code: (err as { code?: string }).code, details: (err as { details?: string }).details }
+          : { raw: String(err) };
+      logger.error("action failed", { kind: a.kind, ...errInfo });
       // 한 액션 실패가 응답 흐름을 막지 않게 swallow
     }
   }
