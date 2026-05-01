@@ -5,6 +5,7 @@ import { loadEnv } from "./env.js";
 import { AgentSdkClaude } from "./claude/agentSdk.js";
 import { runTrigger } from "./triggers/router.js";
 import { attachSchedule } from "./triggers/schedule.js";
+import { attachEvents } from "./triggers/event.js";
 
 const env = loadEnv();
 const logger = new Logger(env.LOG_DIR, "bot");
@@ -15,6 +16,7 @@ attachReceive(async (text, _ctx) => {
 });
 
 attachSchedule(claude);
+attachEvents(claude);
 
 logger.info("jieun-bot starting");
 bot()
