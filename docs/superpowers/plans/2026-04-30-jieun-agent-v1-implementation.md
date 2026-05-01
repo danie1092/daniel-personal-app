@@ -2586,20 +2586,1069 @@ EOF
 
 ## Block 3 — 외부 연결 (Spec step 8~10)
 
-### Task 3.1 — Supabase Realtime — budget_entries INSERT 구독
+Block 1+2 완료 — 봇이 시간 트리거로 능동 발화하고, 자연어에서 데이터 자동 기록함. Block 3는 두 가지 외부 연결:
+
+**3a (Task 3.1~3.8) — 이벤트 트리거 + 시그널 5종**: Supabase Realtime으로 budget_entries INSERT를 구독, 각 INSERT마다 5개 시그널 (예산 페이스, 카테고리 이상치, 루틴 streak/break, 회피→실행 전환, 메모 빈도) 계산, 후보를 `bot_signals`에 저장하고 24h 도배 방지 dedup 통과한 것만 Claude에 컨텍스트로 던져 발화/침묵 판단.
+
+**3b (Task 3.9~3.14) — 캘린더 read/write**: icalBuddy로 Apple Calendar 일정 읽기 (아침/퇴근직전 브리핑에 주입), AppleScript로 등록/삭제, 자연어 → 구조화 확인 흐름.
+
+3a 구현 + 검증 후 3b plan을 detail해서 진행.
+
+---
+
+### Task 3.1 — Supabase Realtime + event 트리거 골격
+
+**Files:**
+- Create: `jieun-bot/src/triggers/event.ts`
+- Modify: `jieun-bot/src/index.ts` (attachEvents 호출)
+
+이 task는 Realtime 구독 wiring만 — 실제 시그널 계산 로직은 다음 task에서. 핸들러는 일단 로그만 찍는 stub.
+
+- [ ] **Step 1: event.ts 골격**
+
+```typescript
+// src/triggers/event.ts
+import type { ClaudeAdapter } from "../claude/adapter.js";
+import { db } from "../db/client.js";
+import { Logger } from "../logger.js";
+import { loadEnv } from "../env.js";
+
+const logger = new Logger(loadEnv().LOG_DIR, "bot");
+
+export function attachEvents(_claude: ClaudeAdapter): void {
+  const channel = db()
+    .channel("budget_entries_changes")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "budget_entries" },
+      (payload) => {
+        // payload.new는 새 row
+        const row = payload.new as { id: string; date: string; category: string; amount: number; type: string };
+        logger.info("event: budget_entries INSERT", {
+          id: row.id,
+          date: row.date,
+          category: row.category,
+          amount: row.amount,
+        });
+        // Task 3.8에서 computeSignals → runTrigger(event) 추가
+      }
+    )
+    .subscribe((status) => {
+      logger.info("realtime subscribe status", { status });
+    });
+
+  logger.info("events attached", { channel: "budget_entries_changes" });
+  // channel 변수는 이후 unsubscribe에 쓸 수 있지만 현재는 lifetime = bot lifetime이라 OK
+}
+```
+
+- [ ] **Step 2: index.ts에서 호출**
+
+```typescript
+import { attachEvents } from "./triggers/event.js";
+
+// attachSchedule(claude); 다음 줄에 추가:
+attachEvents(claude);
+```
+
+- [ ] **Step 3: 빌드 + 테스트**
+
+```bash
+cd /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot && npm test && npx tsc --noEmit && npm run build
+```
+Expected: 27/27 pass (no new tests this task), tsc silent. Realtime 구독 자체는 라이브 검증.
+
+- [ ] **Step 4: 라이브 검증** (이 task의 핵심 — 봇 reload + budget_entries에 INSERT 일어났을 때 로그 확인)
+
+```bash
+# 봇 reload
+launchctl unload -w /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot/launchd/kr.daniel.jieun.plist && \
+  launchctl load -w /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot/launchd/kr.daniel.jieun.plist
+
+# 텔레그램에서 봇한테 "방금 라떼 5천원 마셨어" 같은 메시지 → 자율 기록 일어남
+# 봇 로그에 "event: budget_entries INSERT" 라인 보이면 OK
+tail -f /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot/logs/bot.log | grep -E "event:|realtime"
+```
+
+- [ ] **Step 5: 커밋**
+
+```bash
+git add jieun-bot/src/triggers/event.ts jieun-bot/src/index.ts
+git commit -m "$(cat <<'EOF'
+feat(jieun-bot): Supabase Realtime + event 트리거 골격
+
+attachEvents(claude): budget_entries 테이블의 postgres_changes (INSERT
+이벤트)를 채널로 구독. 일단 stub 핸들러 — 로그만 찍음. Task 3.8에서
+computeSignals → runTrigger(event) 흐름으로 확장.
+
+봇 lifetime 동안 채널 살아있음. SIGTERM 시 process 종료되며 자동 정리.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
 ### Task 3.2 — 시그널: 카테고리 이상치
+
+**Files:**
+- Create: `jieun-bot/src/signals/types.ts` (공통 타입)
+- Create: `jieun-bot/src/signals/categoryOutlier.ts`
+- Create: `jieun-bot/src/signals/categoryOutlier.test.ts`
+
+룰: *이번 주 카테고리별 지출 / 4주 평균* 비율이 1.5배 이상이고 절대값 5만원 이상이면 후보 발화.
+
+- [ ] **Step 1: 공통 타입 (signals/types.ts)**
+
+```typescript
+export type SignalKind =
+  | "category_outlier"
+  | "budget_pace"
+  | "routine_streak_break"
+  | "avoidance_recovery"
+  | "memo_frequency_shift";
+
+export type SignalCandidate = {
+  kind: SignalKind;
+  evidence: Record<string, unknown>;  // 시그널별 근거 데이터 (Claude prompt에 들어감)
+  computed_at: Date;
+};
+```
+
+- [ ] **Step 2: 테스트 (TDD)**
+
+`src/signals/categoryOutlier.test.ts`:
+```typescript
+import { describe, it, expect } from "vitest";
+import { computeCategoryOutlier, type BudgetRow } from "./categoryOutlier.js";
+
+const today = new Date("2026-05-01T12:00:00+09:00");
+
+function row(daysAgo: number, category: string, amount: number): BudgetRow {
+  const d = new Date(today.getTime() - daysAgo * 86400 * 1000);
+  return {
+    date: d.toISOString().slice(0, 10),
+    category,
+    amount,
+    type: "expense",
+  };
+}
+
+describe("computeCategoryOutlier", () => {
+  it("returns null when no data", () => {
+    expect(computeCategoryOutlier([], today)).toBeNull();
+  });
+
+  it("returns null when this week within baseline", () => {
+    // 4주간 식사 매주 100k → 이번주도 100k = 1배 (정상)
+    const rows = [
+      ...Array.from({ length: 4 }, (_, w) =>
+        row(w * 7 + 1, "식사", 100000)
+      ),
+      row(2, "식사", 50000),  // 이번주
+      row(0, "식사", 50000),
+    ];
+    expect(computeCategoryOutlier(rows, today)).toBeNull();
+  });
+
+  it("flags outlier when this week >=1.5x avg AND >=50k", () => {
+    const rows = [
+      // 4주 평균 식사 = 50k/주
+      row(28, "식사", 50000),
+      row(21, "식사", 50000),
+      row(14, "식사", 50000),
+      row(7, "식사", 50000),
+      // 이번주 식사 100k (2배, 절대값 100k)
+      row(3, "식사", 50000),
+      row(1, "식사", 50000),
+    ];
+    const r = computeCategoryOutlier(rows, today);
+    expect(r).not.toBeNull();
+    expect(r?.kind).toBe("category_outlier");
+    expect(r?.evidence.category).toBe("식사");
+    expect(r?.evidence.thisWeek).toBe(100000);
+    expect(r?.evidence.weeklyAvg).toBe(50000);
+  });
+
+  it("does not flag when ratio high but absolute < 50k", () => {
+    // 이번주 30k vs 평균 10k = 3배인데 절대값 작음
+    const rows = [
+      row(28, "카페", 10000),
+      row(21, "카페", 10000),
+      row(14, "카페", 10000),
+      row(7, "카페", 10000),
+      row(0, "카페", 30000),
+    ];
+    expect(computeCategoryOutlier(rows, today)).toBeNull();
+  });
+
+  it("ignores 고정지출 (always recurring, not actionable)", () => {
+    const rows = [
+      // 4주 평균 고정지출 = 50k
+      row(28, "고정지출", 50000),
+      row(21, "고정지출", 50000),
+      row(14, "고정지출", 50000),
+      row(7, "고정지출", 50000),
+      // 이번주 갑자기 200k (4배) — 무시
+      row(0, "고정지출", 200000),
+    ];
+    expect(computeCategoryOutlier(rows, today)).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 3: 테스트 → FAIL → 구현**
+
+`src/signals/categoryOutlier.ts`:
+```typescript
+import type { SignalCandidate } from "./types.js";
+
+const RATIO_THRESHOLD = 1.5;
+const ABSOLUTE_THRESHOLD = 50_000;
+
+export type BudgetRow = {
+  date: string;       // YYYY-MM-DD
+  category: string;
+  amount: number;
+  type: string;
+};
+
+function daysBetween(a: Date, b: Date): number {
+  return Math.floor((b.getTime() - a.getTime()) / (86400 * 1000));
+}
+
+/**
+ * 카테고리별 이번주 지출 vs 4주 평균. 비율 ≥1.5 AND 절대값 ≥50,000 이면 후보.
+ * 고정지출은 제외 (예측 가능, actionable X).
+ */
+export function computeCategoryOutlier(rows: BudgetRow[], now: Date): SignalCandidate | null {
+  if (rows.length === 0) return null;
+
+  // 카테고리별로 그룹화. 이번주(0~6일 전) vs 이전 4주(7~34일 전).
+  const thisWeek = new Map<string, number>();
+  const prior = new Map<string, number>();  // 4주 합계
+
+  for (const r of rows) {
+    if (r.type !== "expense") continue;
+    if (r.category === "고정지출") continue;  // 제외
+    const rowDate = new Date(r.date + "T00:00:00+09:00");
+    const days = daysBetween(rowDate, now);
+    if (days < 0 || days > 34) continue;
+    if (days <= 6) thisWeek.set(r.category, (thisWeek.get(r.category) ?? 0) + r.amount);
+    else if (days <= 34) prior.set(r.category, (prior.get(r.category) ?? 0) + r.amount);
+  }
+
+  // 이번주에 있는 카테고리 중 가장 높은 ratio + 절대값 충족 찾기
+  let best: SignalCandidate | null = null;
+  let bestRatio = 0;
+  for (const [category, weekSum] of thisWeek) {
+    if (weekSum < ABSOLUTE_THRESHOLD) continue;
+    const priorSum = prior.get(category) ?? 0;
+    const weeklyAvg = priorSum / 4;
+    if (weeklyAvg === 0) continue;  // 새 카테고리는 비교 불가, skip
+    const ratio = weekSum / weeklyAvg;
+    if (ratio < RATIO_THRESHOLD) continue;
+    if (ratio > bestRatio) {
+      bestRatio = ratio;
+      best = {
+        kind: "category_outlier",
+        evidence: {
+          category,
+          thisWeek: weekSum,
+          weeklyAvg: Math.round(weeklyAvg),
+          ratio: Math.round(ratio * 100) / 100,
+        },
+        computed_at: now,
+      };
+    }
+  }
+  return best;
+}
+```
+
+- [ ] **Step 4: 테스트 통과 + 커밋**
+
+```bash
+cd /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot && npm test -- src/signals/
+git add jieun-bot/src/signals/types.ts jieun-bot/src/signals/categoryOutlier.ts jieun-bot/src/signals/categoryOutlier.test.ts
+git commit -m "$(cat <<'EOF'
+feat(jieun-bot): 시그널 — 카테고리 이상치
+
+이번주 카테고리별 지출 / 4주 평균 ≥ 1.5배 AND 절대값 ≥ 50,000 → 후보 발화.
+고정지출은 제외 (정기 결제라 actionable X).
+
+types.ts: SignalKind / SignalCandidate 공통 타입.
+categoryOutlier.ts: 순수 함수. test: 5 case (no data, in baseline, outlier,
+absolute X, 고정지출 skip).
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
 ### Task 3.3 — 시그널: 예산 페이스
+
+룰: 월 예산 대비 *이번달 누적 지출* / *경과 비율*. 1.2 (20% 초과 페이스) 이상이면 후보.
+
+**Files:**
+- Create: `jieun-bot/src/signals/budgetPace.ts`
+- Create: `jieun-bot/src/signals/budgetPace.test.ts`
+
+월 예산은 `src/lib/budget/summary.ts`의 `MONTHLY_BUDGET = 2_000_000` 상수 — 봇 쪽에서도 같은 값 사용.
+
+- [ ] **Step 1: 테스트**
+
+`src/signals/budgetPace.test.ts`:
+```typescript
+import { describe, it, expect } from "vitest";
+import { computeBudgetPace, type BudgetRow } from "./budgetPace.js";
+
+describe("computeBudgetPace", () => {
+  it("returns null when no rows", () => {
+    expect(computeBudgetPace([], new Date("2026-05-15T12:00:00+09:00"), 2_000_000)).toBeNull();
+  });
+
+  it("returns null when within pace", () => {
+    // 5/15 = 15일 경과 / 31일 = 48.4%. 예산 200만 → 96.8만이 적정. 90만이면 페이스 OK.
+    const rows: BudgetRow[] = [
+      { date: "2026-05-10", category: "식사", amount: 500000, type: "expense" },
+      { date: "2026-05-12", category: "교통", amount: 400000, type: "expense" },
+    ];
+    expect(computeBudgetPace(rows, new Date("2026-05-15T12:00:00+09:00"), 2_000_000)).toBeNull();
+  });
+
+  it("flags overpace when ratio >= 1.2", () => {
+    // 5/15 — 적정 96.8만. 실제 130만 (1.34배) → 발화.
+    const rows: BudgetRow[] = [
+      { date: "2026-05-10", category: "식사", amount: 800000, type: "expense" },
+      { date: "2026-05-12", category: "교통", amount: 500000, type: "expense" },
+    ];
+    const r = computeBudgetPace(rows, new Date("2026-05-15T12:00:00+09:00"), 2_000_000);
+    expect(r).not.toBeNull();
+    expect(r?.kind).toBe("budget_pace");
+    expect(r?.evidence.actual).toBe(1_300_000);
+    expect((r?.evidence.expected as number)).toBeGreaterThan(900_000);
+    expect((r?.evidence.expected as number)).toBeLessThan(1_000_000);
+  });
+
+  it("excludes 고정지출 + 월급 + 저축 from spend", () => {
+    const rows: BudgetRow[] = [
+      { date: "2026-05-01", category: "고정지출", amount: 1_000_000, type: "expense" }, // 제외
+      { date: "2026-05-01", category: "월급", amount: 3_000_000, type: "income" },     // 제외
+      { date: "2026-05-10", category: "식사", amount: 100_000, type: "expense" },       // 포함
+    ];
+    const r = computeBudgetPace(rows, new Date("2026-05-15T12:00:00+09:00"), 2_000_000);
+    expect(r).toBeNull();  // 식사 10만은 페이스 안에
+  });
+});
+```
+
+- [ ] **Step 2: 구현**
+
+`src/signals/budgetPace.ts`:
+```typescript
+import type { SignalCandidate } from "./types.js";
+
+const PACE_THRESHOLD = 1.2;
+
+export type BudgetRow = {
+  date: string;
+  category: string;
+  amount: number;
+  type: string;
+};
+
+export function computeBudgetPace(
+  rows: BudgetRow[],
+  now: Date,
+  monthlyBudget: number
+): SignalCandidate | null {
+  if (rows.length === 0) return null;
+
+  // KST 기준 이번달 첫날 + 일수 계산
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" });
+  const todayStr = fmt.format(now);  // YYYY-MM-DD
+  const [yStr, mStr] = todayStr.split("-");
+  const y = Number(yStr);
+  const m = Number(mStr);
+  const monthStart = `${yStr}-${mStr}-01`;
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const dayOfMonth = Number(todayStr.split("-")[2]);
+
+  // 이번달 expense 합계 (고정지출 제외)
+  let actual = 0;
+  for (const r of rows) {
+    if (r.type !== "expense") continue;
+    if (r.category === "고정지출") continue;
+    if (r.date < monthStart || r.date > todayStr) continue;
+    actual += r.amount;
+  }
+
+  const expected = (monthlyBudget * dayOfMonth) / daysInMonth;
+  if (actual < expected * PACE_THRESHOLD) return null;
+
+  return {
+    kind: "budget_pace",
+    evidence: {
+      actual,
+      expected: Math.round(expected),
+      ratio: Math.round((actual / expected) * 100) / 100,
+      dayOfMonth,
+      daysInMonth,
+      monthlyBudget,
+    },
+    computed_at: now,
+  };
+}
+```
+
+- [ ] **Step 3: 커밋**
+
+```bash
+git add jieun-bot/src/signals/budgetPace.ts jieun-bot/src/signals/budgetPace.test.ts
+git commit -m "feat(jieun-bot): 시그널 — 예산 페이스
+
+이번달 누적 지출 vs (월예산 × 일자/월일수) ≥ 1.2배 → 후보 발화.
+고정지출 + income + saving 제외. KST 기준 일자.
+
+테스트: no data, within pace, overpace, exclude 고정지출 4 case.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
 ### Task 3.4 — 시그널: 루틴 streak/break
+
+룰: 어떤 루틴 항목이든 *5일 연속 미체크* 면 회피 패턴 후보 발화.
+
+**Files:**
+- Create: `jieun-bot/src/signals/routineStreak.ts`
+- Create: `jieun-bot/src/signals/routineStreak.test.ts`
+
+routine_items + routine_checks 테이블 사용. 자세한 구조는 `src/lib/routine/today.ts` 참고.
+
+- [ ] **Step 1: 테스트**
+
+```typescript
+import { describe, it, expect } from "vitest";
+import { computeRoutineStreak, type RoutineCheckRow, type RoutineItemRow } from "./routineStreak.js";
+
+const today = new Date("2026-05-01T12:00:00+09:00");
+
+describe("computeRoutineStreak", () => {
+  it("returns null when no items", () => {
+    expect(computeRoutineStreak([], [], today)).toBeNull();
+  });
+
+  it("returns null when all items have recent checks", () => {
+    const items: RoutineItemRow[] = [{ id: "i1", name: "운동", emoji: "🏃" }];
+    const checks: RoutineCheckRow[] = [
+      { item_id: "i1", date: "2026-04-30", checked: true },
+      { item_id: "i1", date: "2026-04-29", checked: true },
+    ];
+    expect(computeRoutineStreak(items, checks, today)).toBeNull();
+  });
+
+  it("flags 5+ day break", () => {
+    const items: RoutineItemRow[] = [{ id: "i1", name: "운동", emoji: "🏃" }];
+    // 마지막 체크가 6일 전. 그 이후 체크 0.
+    const checks: RoutineCheckRow[] = [
+      { item_id: "i1", date: "2026-04-25", checked: true },  // 6일 전
+    ];
+    const r = computeRoutineStreak(items, checks, today);
+    expect(r).not.toBeNull();
+    expect(r?.kind).toBe("routine_streak_break");
+    expect(r?.evidence.itemName).toBe("운동");
+    expect(r?.evidence.daysSinceCheck).toBe(6);
+  });
+
+  it("picks the longest break when multiple items qualify", () => {
+    const items: RoutineItemRow[] = [
+      { id: "i1", name: "운동", emoji: "🏃" },
+      { id: "i2", name: "독서", emoji: "📚" },
+    ];
+    const checks: RoutineCheckRow[] = [
+      { item_id: "i1", date: "2026-04-25", checked: true }, // 6일 break
+      { item_id: "i2", date: "2026-04-22", checked: true }, // 9일 break
+    ];
+    const r = computeRoutineStreak(items, checks, today);
+    expect(r?.evidence.itemName).toBe("독서");
+    expect(r?.evidence.daysSinceCheck).toBe(9);
+  });
+});
+```
+
+- [ ] **Step 2: 구현**
+
+```typescript
+import type { SignalCandidate } from "./types.js";
+
+const BREAK_THRESHOLD_DAYS = 5;
+
+export type RoutineItemRow = { id: string; name: string; emoji: string };
+export type RoutineCheckRow = { item_id: string; date: string; checked: boolean };
+
+function daysBetween(dateStr: string, now: Date): number {
+  const a = new Date(dateStr + "T00:00:00+09:00");
+  return Math.floor((now.getTime() - a.getTime()) / (86400 * 1000));
+}
+
+export function computeRoutineStreak(
+  items: RoutineItemRow[],
+  checks: RoutineCheckRow[],
+  now: Date
+): SignalCandidate | null {
+  if (items.length === 0) return null;
+
+  // item별 마지막 체크 날짜
+  const lastCheck = new Map<string, string>();
+  for (const c of checks) {
+    if (!c.checked) continue;
+    const prev = lastCheck.get(c.item_id);
+    if (!prev || c.date > prev) lastCheck.set(c.item_id, c.date);
+  }
+
+  // 가장 긴 break 찾기
+  let worst: { item: RoutineItemRow; days: number } | null = null;
+  for (const item of items) {
+    const last = lastCheck.get(item.id);
+    if (!last) continue; // 한 번도 체크 안 한 routine은 skip (새로 만든 것일 수 있음)
+    const days = daysBetween(last, now);
+    if (days < BREAK_THRESHOLD_DAYS) continue;
+    if (!worst || days > worst.days) worst = { item, days };
+  }
+
+  if (!worst) return null;
+  return {
+    kind: "routine_streak_break",
+    evidence: {
+      itemId: worst.item.id,
+      itemName: worst.item.name,
+      itemEmoji: worst.item.emoji,
+      daysSinceCheck: worst.days,
+    },
+    computed_at: now,
+  };
+}
+```
+
+- [ ] **Step 3: 커밋** (use the same pattern as 3.2/3.3)
+
+---
+
 ### Task 3.5 — 시그널: 회피→실행 전환
+
+룰: 어떤 routine이 *3일 이상 미체크* 후 *오늘 체크됨* → 격려 후보.
+
+**Files:**
+- Create: `jieun-bot/src/signals/avoidanceRecovery.ts`
+- Create: `jieun-bot/src/signals/avoidanceRecovery.test.ts`
+
+- [ ] **Step 1: 테스트**
+
+```typescript
+import { describe, it, expect } from "vitest";
+import { computeAvoidanceRecovery, type RoutineCheckRow } from "./avoidanceRecovery.js";
+
+const today = new Date("2026-05-01T12:00:00+09:00");
+
+describe("computeAvoidanceRecovery", () => {
+  it("returns null when no checks today", () => {
+    expect(computeAvoidanceRecovery([], today)).toBeNull();
+  });
+
+  it("flags when item checked today after 3+ day break", () => {
+    const checks: RoutineCheckRow[] = [
+      { item_id: "i1", date: "2026-04-26", checked: true },  // 5일 전
+      { item_id: "i1", date: "2026-05-01", checked: true },  // 오늘
+    ];
+    const r = computeAvoidanceRecovery(checks, today);
+    expect(r).not.toBeNull();
+    expect(r?.kind).toBe("avoidance_recovery");
+    expect(r?.evidence.itemId).toBe("i1");
+    expect(r?.evidence.gapDays).toBe(5);
+  });
+
+  it("returns null when checked yesterday too (not avoidance)", () => {
+    const checks: RoutineCheckRow[] = [
+      { item_id: "i1", date: "2026-04-30", checked: true },
+      { item_id: "i1", date: "2026-05-01", checked: true },
+    ];
+    expect(computeAvoidanceRecovery(checks, today)).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 2: 구현**
+
+```typescript
+import type { SignalCandidate } from "./types.js";
+
+const MIN_GAP_DAYS = 3;
+
+export type RoutineCheckRow = { item_id: string; date: string; checked: boolean };
+
+function fmtKst(d: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(d);
+}
+
+export function computeAvoidanceRecovery(
+  checks: RoutineCheckRow[],
+  now: Date
+): SignalCandidate | null {
+  const todayStr = fmtKst(now);
+
+  // item별 체크 날짜 집합
+  const dates = new Map<string, Set<string>>();
+  for (const c of checks) {
+    if (!c.checked) continue;
+    if (!dates.has(c.item_id)) dates.set(c.item_id, new Set());
+    dates.get(c.item_id)!.add(c.date);
+  }
+
+  for (const [itemId, dset] of dates) {
+    if (!dset.has(todayStr)) continue;
+    // 오늘 직전 체크일 찾기 — 가장 최근 (today 제외)
+    const sorted = Array.from(dset).filter((d) => d < todayStr).sort();
+    const last = sorted[sorted.length - 1];
+    if (!last) continue;
+    const gap = Math.floor(
+      (new Date(todayStr + "T00:00:00+09:00").getTime() -
+        new Date(last + "T00:00:00+09:00").getTime()) /
+        (86400 * 1000)
+    );
+    if (gap >= MIN_GAP_DAYS) {
+      return {
+        kind: "avoidance_recovery",
+        evidence: { itemId, gapDays: gap, lastCheckBefore: last, today: todayStr },
+        computed_at: now,
+      };
+    }
+  }
+  return null;
+}
+```
+
+- [ ] **Step 3: 커밋**
+
+---
+
 ### Task 3.6 — 시그널: 메모 빈도 변화
-### Task 3.7 — 시그널 도배 방지 (24h dedup)
-### Task 3.8 — 이벤트 트리거 통합 흐름
-### Task 3.9 — icalBuddy 캘린더 읽기
-### Task 3.10 — 아침/퇴근직전 브리핑에 캘린더 주입
-### Task 3.11 — AppleScript 등록/삭제 + osascript 래퍼
-### Task 3.12 — write_calendar / delete_calendar 도구
-### Task 3.13 — 자연어 → 구조화 → 확인 → 등록 상태머신
-### Task 3.14 — 캘린더 등록 → bot_writes 추적
+
+룰: *최근 7일 메모 수* / *그 이전 7일 메모 수*. 비율 < 0.3 (급감) 또는 > 3 (급증) → 후보.
+
+**Files:**
+- Create: `jieun-bot/src/signals/memoFrequency.ts`
+- Create: `jieun-bot/src/signals/memoFrequency.test.ts`
+
+- [ ] **Step 1: 테스트**
+
+```typescript
+import { describe, it, expect } from "vitest";
+import { computeMemoFrequency, type MemoRow } from "./memoFrequency.js";
+
+const today = new Date("2026-05-15T12:00:00+09:00");
+
+function memo(daysAgo: number): MemoRow {
+  const d = new Date(today.getTime() - daysAgo * 86400 * 1000);
+  return { created_at: d.toISOString() };
+}
+
+describe("computeMemoFrequency", () => {
+  it("returns null when no memos", () => {
+    expect(computeMemoFrequency([], today)).toBeNull();
+  });
+
+  it("returns null when in normal range", () => {
+    const rows = [memo(2), memo(5), memo(10), memo(12)];  // 2/2 = 1.0
+    expect(computeMemoFrequency(rows, today)).toBeNull();
+  });
+
+  it("flags drop (recent <30% of prior)", () => {
+    const rows = [
+      memo(2),  // recent: 1
+      memo(8), memo(9), memo(10), memo(11),  // prior: 4
+    ];
+    const r = computeMemoFrequency(rows, today);
+    expect(r?.kind).toBe("memo_frequency_shift");
+    expect(r?.evidence.direction).toBe("drop");
+  });
+
+  it("flags surge (recent >3x prior)", () => {
+    const rows = [
+      memo(1), memo(2), memo(3), memo(4), memo(5),  // recent: 5
+      memo(10),  // prior: 1
+    ];
+    const r = computeMemoFrequency(rows, today);
+    expect(r?.evidence.direction).toBe("surge");
+  });
+});
+```
+
+- [ ] **Step 2: 구현**
+
+```typescript
+import type { SignalCandidate } from "./types.js";
+
+const DROP_THRESHOLD = 0.3;
+const SURGE_THRESHOLD = 3.0;
+
+export type MemoRow = { created_at: string };
+
+export function computeMemoFrequency(rows: MemoRow[], now: Date): SignalCandidate | null {
+  if (rows.length === 0) return null;
+  const sevenAgo = now.getTime() - 7 * 86400 * 1000;
+  const fourteenAgo = now.getTime() - 14 * 86400 * 1000;
+
+  let recent = 0;
+  let prior = 0;
+  for (const r of rows) {
+    const t = new Date(r.created_at).getTime();
+    if (t >= sevenAgo) recent++;
+    else if (t >= fourteenAgo) prior++;
+  }
+
+  if (prior === 0 && recent === 0) return null;
+  if (prior === 0) return null;  // 갑자기 시작한 거 — 비교 불가
+
+  const ratio = recent / prior;
+  let direction: "drop" | "surge" | null = null;
+  if (ratio < DROP_THRESHOLD) direction = "drop";
+  else if (ratio > SURGE_THRESHOLD) direction = "surge";
+  if (!direction) return null;
+
+  return {
+    kind: "memo_frequency_shift",
+    evidence: { recent, prior, ratio: Math.round(ratio * 100) / 100, direction },
+    computed_at: now,
+  };
+}
+```
+
+- [ ] **Step 3: 커밋**
+
+---
+
+### Task 3.7 — bot_signals CRUD + 24h dedup
+
+**Files:**
+- Create: `jieun-bot/src/db/botSignals.ts`
+- Create: `jieun-bot/src/db/botSignals.test.ts`
+
+도배 방지: 같은 `kind` 시그널이 24시간 내 이미 발화(`fired_at != null`)했으면 새 후보를 발화하지 않음.
+
+- [ ] **Step 1: 테스트 (통합)**
+
+```typescript
+import { describe, it, expect, afterAll } from "vitest";
+import { db } from "./client.js";
+import { recordCandidate, lastFiredAt, markFired } from "./botSignals.js";
+
+const TEST_KIND = "category_outlier";
+
+describe("botSignals", () => {
+  afterAll(async () => {
+    await db().from("bot_signals").delete().like("user_message", "__test_%");
+  });
+
+  it("records candidate (fired_at null)", async () => {
+    const id = await recordCandidate({ kind: TEST_KIND, evidence: { test: 1 } });
+    expect(id).toMatch(/^[0-9a-f-]+$/);
+  });
+
+  it("lastFiredAt returns null when no fired", async () => {
+    const before = await lastFiredAt(TEST_KIND);
+    // 새 kind 또는 fired된 게 24h 안에 없으면 null
+    expect(before).toBeNull();
+  });
+
+  it("markFired sets fired_at + user_message", async () => {
+    const id = await recordCandidate({ kind: TEST_KIND, evidence: { test: 2 } });
+    await markFired(id, "__test_message");
+    const last = await lastFiredAt(TEST_KIND);
+    expect(last).not.toBeNull();
+  });
+});
+```
+
+- [ ] **Step 2: 구현**
+
+```typescript
+import { db } from "./client.js";
+
+export async function recordCandidate(args: {
+  kind: string;
+  evidence: Record<string, unknown>;
+}): Promise<string> {
+  const { data, error } = await db()
+    .from("bot_signals")
+    .insert({ kind: args.kind, evidence: args.evidence })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data.id;
+}
+
+/**
+ * 가장 최근에 발화(fired_at != null)된 시그널의 fired_at 시간.
+ * dedup 룰: 24h 내 같은 kind가 발화했으면 새로 발화 안 함.
+ */
+export async function lastFiredAt(kind: string): Promise<Date | null> {
+  const { data, error } = await db()
+    .from("bot_signals")
+    .select("fired_at")
+    .eq("kind", kind)
+    .not("fired_at", "is", null)
+    .order("fired_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data?.fired_at) return null;
+  return new Date(data.fired_at);
+}
+
+export async function markFired(id: string, userMessage: string): Promise<void> {
+  const { error } = await db()
+    .from("bot_signals")
+    .update({ fired_at: new Date().toISOString(), user_message: userMessage })
+    .eq("id", id);
+  if (error) throw error;
+}
+```
+
+- [ ] **Step 3: 커밋**
+
+---
+
+### Task 3.8 — 통합 — computeSignals + event 트리거 흐름
+
+**Files:**
+- Create: `jieun-bot/src/signals/compute.ts`
+- Modify: `jieun-bot/src/triggers/event.ts` (stub → 통합 흐름)
+- Modify: `jieun-bot/src/triggers/router.ts` (markFired 호출 — 발화 시 시그널 마킹)
+
+흐름:
+1. budget_entries INSERT 들어옴 → event 트리거 핸들러 호출
+2. Supabase에서 최근 데이터 fetch (60일 budget, 60일 routine, 60일 memo)
+3. computeSignals → 5종 시그널 계산
+4. 각 후보에 대해 lastFiredAt(kind) 체크 → 24h 내 발화한 적 있으면 skip
+5. 통과한 후보들: bot_signals에 candidate INSERT (id 보관)
+6. contextSection 만들기 (각 시그널 evidence를 자연어로)
+7. runTrigger(event) 호출
+8. router에서 발화 성공 시 markFired(id, sentText)
+
+- [ ] **Step 1: signals/compute.ts**
+
+```typescript
+import { db } from "../db/client.js";
+import { computeCategoryOutlier } from "./categoryOutlier.js";
+import { computeBudgetPace } from "./budgetPace.js";
+import { computeRoutineStreak } from "./routineStreak.js";
+import { computeAvoidanceRecovery } from "./avoidanceRecovery.js";
+import { computeMemoFrequency } from "./memoFrequency.js";
+import { lastFiredAt } from "../db/botSignals.js";
+import type { SignalCandidate } from "./types.js";
+
+const MONTHLY_BUDGET = 2_000_000;
+const DEDUP_HOURS = 24;
+
+export async function computeSignals(now: Date = new Date()): Promise<SignalCandidate[]> {
+  // 60일 분량 데이터 fetch (cheaper than per-signal fetches)
+  const sixtyAgo = new Date(now.getTime() - 60 * 86400 * 1000).toISOString().slice(0, 10);
+
+  const [budgetRes, itemsRes, checksRes, memoRes] = await Promise.all([
+    db().from("budget_entries").select("date, category, amount, type").gte("date", sixtyAgo),
+    db().from("routine_items").select("id, name, emoji"),
+    db().from("routine_checks").select("item_id, date, checked").gte("date", sixtyAgo),
+    db().from("memo_entries").select("created_at").gte("created_at", sixtyAgo),
+  ]);
+
+  const budgetRows = (budgetRes.data ?? []) as { date: string; category: string; amount: number; type: string }[];
+  const items = (itemsRes.data ?? []) as { id: string; name: string; emoji: string }[];
+  const checks = (checksRes.data ?? []) as { item_id: string; date: string; checked: boolean }[];
+  const memos = (memoRes.data ?? []) as { created_at: string }[];
+
+  const allCandidates: (SignalCandidate | null)[] = [
+    computeCategoryOutlier(budgetRows, now),
+    computeBudgetPace(budgetRows, now, MONTHLY_BUDGET),
+    computeRoutineStreak(items, checks, now),
+    computeAvoidanceRecovery(checks, now),
+    computeMemoFrequency(memos, now),
+  ];
+
+  // 24h dedup 통과한 후보만
+  const dedupCutoff = now.getTime() - DEDUP_HOURS * 3600 * 1000;
+  const passed: SignalCandidate[] = [];
+  for (const c of allCandidates) {
+    if (!c) continue;
+    const last = await lastFiredAt(c.kind);
+    if (last && last.getTime() > dedupCutoff) continue;
+    passed.push(c);
+  }
+  return passed;
+}
+```
+
+- [ ] **Step 2: triggers/event.ts 업데이트**
+
+```typescript
+import type { ClaudeAdapter } from "../claude/adapter.js";
+import { db } from "../db/client.js";
+import { Logger } from "../logger.js";
+import { loadEnv } from "../env.js";
+import { computeSignals } from "../signals/compute.js";
+import { recordCandidate } from "../db/botSignals.js";
+import { runTrigger } from "./router.js";
+
+const logger = new Logger(loadEnv().LOG_DIR, "bot");
+
+function evidenceToContext(candidates: { kind: string; evidence: Record<string, unknown> }[]): string {
+  const lines: string[] = [];
+  for (const c of candidates) {
+    if (c.kind === "category_outlier") {
+      const e = c.evidence as { category: string; thisWeek: number; weeklyAvg: number; ratio: number };
+      lines.push(`- 카테고리 이상치: 이번주 "${e.category}" ${e.thisWeek.toLocaleString()}원 (4주 평균 ${e.weeklyAvg.toLocaleString()}원의 ${e.ratio}배)`);
+    } else if (c.kind === "budget_pace") {
+      const e = c.evidence as { actual: number; expected: number; ratio: number; dayOfMonth: number; daysInMonth: number };
+      lines.push(`- 예산 페이스: 이번달 ${e.dayOfMonth}일째 — 누적 ${e.actual.toLocaleString()}원 (기대 ${e.expected.toLocaleString()}원의 ${e.ratio}배)`);
+    } else if (c.kind === "routine_streak_break") {
+      const e = c.evidence as { itemName: string; itemEmoji: string; daysSinceCheck: number };
+      lines.push(`- 루틴 회피: "${e.itemEmoji} ${e.itemName}" ${e.daysSinceCheck}일째 미체크`);
+    } else if (c.kind === "avoidance_recovery") {
+      const e = c.evidence as { gapDays: number };
+      lines.push(`- 회피→실행 전환: ${e.gapDays}일 미루다 오늘 다시 시작`);
+    } else if (c.kind === "memo_frequency_shift") {
+      const e = c.evidence as { recent: number; prior: number; ratio: number; direction: string };
+      lines.push(`- 메모 빈도 ${e.direction === "drop" ? "급감" : "급증"}: 최근 7일 ${e.recent}개 vs 이전 7일 ${e.prior}개 (${e.ratio}배)`);
+    }
+  }
+  return lines.join("\n");
+}
+
+export function attachEvents(claude: ClaudeAdapter): void {
+  db()
+    .channel("budget_entries_changes")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "budget_entries" },
+      async (payload) => {
+        const row = payload.new as { id: string };
+        logger.info("event: budget INSERT", { id: row.id });
+
+        try {
+          const candidates = await computeSignals();
+          if (candidates.length === 0) {
+            logger.info("event: no signal candidates");
+            return;
+          }
+
+          const ids: string[] = [];
+          for (const c of candidates) {
+            const id = await recordCandidate({ kind: c.kind, evidence: c.evidence });
+            ids.push(id);
+          }
+
+          const contextSection = evidenceToContext(candidates);
+          logger.info("event: signal candidates", { count: candidates.length, kinds: candidates.map((c) => c.kind) });
+
+          await runTrigger(claude, {
+            trigger: "event",
+            userPrompt: `데이터 변화 감지. 아래 시그널을 보고 다영에게 한마디 건넬 만한지 판단. 답이 없을 수도 있으니 부담 없이. 침묵 OK.\n\n${contextSection}`,
+            contextSection,
+            // 발화 성공 시 candidate ids도 mark되어야 — router가 처리하도록 별도 옵션 추가 (Step 3)
+            signalCandidateIds: ids,
+          } as unknown as Parameters<typeof runTrigger>[1]);  // 임시 cast — Step 3에서 정식 타입
+        } catch (err) {
+          logger.error("event handler failed", { err: String(err) });
+        }
+      }
+    )
+    .subscribe((status) => {
+      logger.info("realtime subscribe status", { status });
+    });
+
+  logger.info("events attached", { channel: "budget_entries_changes" });
+}
+```
+
+- [ ] **Step 3: router.ts에 signalCandidateIds 처리**
+
+`TriggerContext`에 optional `signalCandidateIds?: string[]` 추가. runTrigger에서 발화 성공 시 (cleanText 있을 때) 각 id에 markFired 호출.
+
+```typescript
+// router.ts top:
+import { markFired } from "../db/botSignals.js";
+
+export type TriggerContext = {
+  trigger: Exclude<Trigger, "system">;
+  userPrompt: string;
+  contextSection?: string;
+  signalCandidateIds?: string[];  // event 트리거에서 발화 성공 시 mark 대상
+};
+
+// runTrigger 안 — sendToOwner(cleanText, ...) 다음에:
+if (cleanText && ctx.signalCandidateIds?.length) {
+  for (const id of ctx.signalCandidateIds) {
+    try {
+      await markFired(id, cleanText);
+    } catch (err) {
+      logger.warn("markFired failed", { id, err: String(err) });
+    }
+  }
+}
+```
+
+- [ ] **Step 4: 빌드 + 테스트 + 라이브 검증**
+
+```bash
+cd /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot && npm test && npx tsc --noEmit && npm run build
+```
+Expected: 모든 시그널 unit 테스트 + 기존 테스트 다 pass.
+
+라이브 검증: 봇 reload + budget_entries에 새 INSERT 일어나는 상황 만들기 (텔레그램 자율 기록 또는 SMS 자동입력) → 로그에 "event: signal candidates" 라인 + Claude가 시그널 보고 발화하는지 확인.
+
+- [ ] **Step 5: 커밋**
+
+```bash
+git add jieun-bot/src/signals/compute.ts jieun-bot/src/triggers/event.ts jieun-bot/src/triggers/router.ts
+git commit -m "feat(jieun-bot): event 트리거 통합 — 시그널 5종 + dedup + Claude 발화
+
+budget_entries INSERT → computeSignals (60일 데이터 fetch + 5종 계산) →
+24h dedup (lastFiredAt 체크) → 통과한 후보 bot_signals에 record →
+contextSection 만들어 Claude에 던짐 → 발화 성공 시 markFired(candidate id).
+
+evidenceToContext: 각 시그널 evidence를 한국어 한 줄로 변환해 prompt에
+주입 (Claude가 자연스럽게 인용 가능).
+
+router에 signalCandidateIds optional 추가 — 발화 시 mark.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+### 🟢 Block 3a 체크포인트
+
+다영이 검증할 것:
+1. 봇 reload 후 budget_entries에 INSERT 일어나면 (텔레그램 자율 기록 등) 로그에 "event: signal candidates" 보임
+2. 시그널 후보 있을 때만 Claude가 호출됨 — 평소엔 침묵 (대부분 평범한 INSERT는 시그널 안 잡힘)
+3. 24h 안에 같은 kind 두 번째는 발화 안 함 (dedup)
+4. Supabase `bot_signals` 테이블에 candidate row 쌓이는 것 확인 (`SELECT * FROM bot_signals ORDER BY computed_at DESC LIMIT 10;`)
+
+---
+
+### Task 3.9 — icalBuddy 캘린더 읽기 (placeholder)
+### Task 3.10 — 아침/퇴근직전 브리핑에 캘린더 주입 (placeholder)
+### Task 3.11 — AppleScript 등록/삭제 + osascript 래퍼 (placeholder)
+### Task 3.12 — write_calendar / delete_calendar 도구 (placeholder)
+### Task 3.13 — 자연어 → 구조화 → 확인 → 등록 상태머신 (placeholder)
+### Task 3.14 — 캘린더 등록 → bot_writes 추적 (placeholder)
+
+> Block 3a 완료 후 detail 작성.
 
 ### 🟢 Block 3 체크포인트
 외식 평소보다 많을 때 봇이 한마디. 다영이 "내일 3시 ABC" → 구조화 확인 → 캘린더 등록.
