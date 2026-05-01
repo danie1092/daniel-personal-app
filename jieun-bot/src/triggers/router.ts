@@ -8,6 +8,7 @@ import { loadEnv } from "../env.js";
 import { parseActions } from "../claude/actions.js";
 import { executeActions } from "../claude/executeActions.js";
 import { isInSilenceWindow } from "./silenceWindow.js";
+import { markFired } from "../db/botSignals.js";
 
 const logger = new Logger(loadEnv().LOG_DIR, "bot");
 
@@ -15,6 +16,7 @@ export type TriggerContext = {
   trigger: Exclude<Trigger, "system">;
   userPrompt: string;          // 트리거의 질문 / 다영 메시지 / 컨텍스트
   contextSection?: string;     // 시그널 후보 등 (Block 3에서 채움)
+  signalCandidateIds?: string[]; // event 트리거에서 발화 성공 시 mark 대상
 };
 
 /**
@@ -54,6 +56,15 @@ export async function runTrigger(
     }
     if (cleanText) {
       await sendToOwner(cleanText, ctx.trigger);
+      if (ctx.signalCandidateIds?.length) {
+        for (const id of ctx.signalCandidateIds) {
+          try {
+            await markFired(id, cleanText);
+          } catch (err) {
+            logger.warn("markFired failed", { id, err: String(err) });
+          }
+        }
+      }
     }
     if (actions.length > 0) {
       await executeActions(actions);
