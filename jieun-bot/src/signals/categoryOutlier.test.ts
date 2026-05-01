@@ -67,4 +67,17 @@ describe("computeCategoryOutlier", () => {
     ];
     expect(computeCategoryOutlier(rows, today)).toBeNull();
   });
+
+  it("ignores 미분류 (Phase 3 SMS fallback — surge means '분류 미작업', not spending behavior)", () => {
+    const rows = [
+      row(28, "미분류", 5000),
+      row(21, "미분류", 5000),
+      row(14, "미분류", 5000),
+      row(7, "미분류", 5000),
+      // 이번주 갑자기 30만 (60배+) — 봇이 잡으면 노이즈
+      row(2, "미분류", 150000),
+      row(0, "미분류", 150000),
+    ];
+    expect(computeCategoryOutlier(rows, today)).toBeNull();
+  });
 });

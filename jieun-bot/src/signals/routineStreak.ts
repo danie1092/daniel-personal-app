@@ -1,6 +1,7 @@
 import type { SignalCandidate } from "./types.js";
 
 const BREAK_THRESHOLD_DAYS = 5;
+const BREAK_UPPER_DAYS = 14;  // 14일 넘으면 "회피"가 아니라 "포기" — actionable X
 
 export type RoutineItemRow = { id: string; name: string; emoji: string };
 export type RoutineCheckRow = { item_id: string; date: string; checked: boolean };
@@ -30,6 +31,7 @@ export function computeRoutineStreak(
     if (!last) continue;
     const days = daysBetween(last, now);
     if (days < BREAK_THRESHOLD_DAYS) continue;
+    if (days > BREAK_UPPER_DAYS) continue;  // 너무 오래되면 포기 — 캐묻기 X
     if (!worst || days > worst.days) worst = { item, days };
   }
 

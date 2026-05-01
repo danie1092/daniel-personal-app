@@ -27,6 +27,9 @@ export function computeCategoryOutlier(rows: BudgetRow[], now: Date): SignalCand
   for (const r of rows) {
     if (r.type !== "expense") continue;
     if (r.category === "고정지출") continue;
+    // "미분류"는 Phase 3 SMS 자동입력의 fallback — surge가 카테고리 행동 신호가 아니라
+    // 분류 미작업의 신호라 actionable X. 다영이 가계부 페이지에서 분류해야 할 일.
+    if (r.category === "미분류") continue;
     const rowDate = new Date(r.date + "T00:00:00+09:00");
     const days = daysBetween(rowDate, now);
     if (days < 0 || days > 34) continue;
