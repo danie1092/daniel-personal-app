@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { runTrigger } from "./router.js";
 import { runDailySummary } from "../jobs/dailySummary.js";
+import { runLatentObservation } from "./latent.js";
 import type { ClaudeAdapter } from "../claude/adapter.js";
 import { Logger } from "../logger.js";
 import { loadEnv } from "../env.js";
@@ -106,7 +107,27 @@ export function attachSchedule(claude: ClaudeAdapter): void {
     { timezone: "Asia/Seoul" }
   );
 
+  // 잠재 관찰 — 활성 시간대 3 슬롯 (10:00 / 15:00 / 19:30)
+  for (const [hour, min, label] of [
+    [10, 0, "10:00"],
+    [15, 0, "15:00"],
+    [19, 30, "19:30"],
+  ] as const) {
+    cron.schedule(
+      `${min} ${hour} * * *`,
+      () => {
+        runLatentObservation(claude).catch((err) =>
+          logger.error("latent observation failed", { slot: label, err: String(err) })
+        );
+      },
+      { timezone: "Asia/Seoul" }
+    );
+  }
+
   logger.info("schedule attached", {
-    tasks: ["morning:08", "lunch:12:30", "evening_brief:20:30", "end_of_day:21", "retro:23", "dailySummary:23:30"],
+    tasks: [
+      "morning:08", "lunch:12:30", "evening_brief:20:30", "end_of_day:21",
+      "retro:23", "dailySummary:23:30", "latent:10/15/19:30",
+    ],
   });
 }
