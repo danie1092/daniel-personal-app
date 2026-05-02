@@ -10,6 +10,8 @@ import { parseActions } from "../claude/actions.js";
 import { executeActions } from "../claude/executeActions.js";
 import { isInSilenceWindow } from "./silenceWindow.js";
 import { markFired } from "../db/botSignals.js";
+import { isMuted } from "../db/botMute.js";
+import { shouldBackoff } from "./backoff.js";
 
 const logger = new Logger(loadEnv().LOG_DIR, "bot");
 
@@ -35,7 +37,17 @@ export async function runTrigger(
   ctx: TriggerContext
 ): Promise<string> {
   // user 트리거는 항상 살림 (다영이 새벽에 메시지 보내면 응답)
-  // schedule/event/latent는 자정~07:59 차단
+  // schedule/event/latent는 뮤트/backoff/자정~07:59 차단
+  if (ctx.trigger !== "user") {
+    if (await isMuted()) {
+      logger.info("silenced (mute)", { trigger: ctx.trigger });
+      return "";
+    }
+    if (await shouldBackoff()) {
+      logger.info("silenced (backoff)", { trigger: ctx.trigger });
+      return "";
+    }
+  }
   if (ctx.trigger !== "user" && isInSilenceWindow()) {
     logger.info("silenced (window)", { trigger: ctx.trigger });
     return "";
