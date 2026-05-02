@@ -1,4 +1,4 @@
-// jieun-bot/src/db/weeklySummary.ts (stub — full impl in Task 4b.4/4b.5)
+// jieun-bot/src/db/weeklySummary.ts
 import { db } from "./client.js";
 
 export type WeeklySummary = {
@@ -19,4 +19,11 @@ export async function fetchWeeklySummariesBetween(
     .order("week_start", { ascending: true });
   if (error) throw error;
   return (data ?? []) as WeeklySummary[];
+}
+
+export async function upsertWeeklySummary(weekStart: string, summary: string): Promise<void> {
+  const { error } = await db()
+    .from("weekly_summary")
+    .upsert({ week_start: weekStart, summary }, { onConflict: "week_start" });
+  if (error) throw error;
 }
