@@ -39,7 +39,7 @@ export function formatWeeklySummaries(items: WeeklySummary[]): string {
     .map((i) => {
       const start = new Date(i.week_start);
       const end = new Date(start.getTime() + 6 * 86400 * 1000);
-      const endStr = `${end.getMonth() + 1}/${end.getDate()}`;
+      const endStr = `${end.getUTCMonth() + 1}/${end.getUTCDate()}`;
       return `- ${formatMd(i.week_start)}~${endStr}: ${i.summary}`;
     })
     .join("\n");
@@ -62,7 +62,6 @@ export async function loadMemorySection(hoursRecent: number = 24): Promise<strin
   const items = await recentConversations(hoursRecent);
   const recent = formatRecentConversations(items.slice(0, RECENT_RAW_CAP));
 
-  const today = todayIsoDate();
   const thirtyAgo = dateMinus(30);
   const yesterday = dateMinus(1);
 

@@ -1,5 +1,4 @@
-import { describe, it, expect, afterAll } from "vitest";
-import { db } from "../db/client.js";
+import { describe, it, expect, vi } from "vitest";
 import {
   formatRecentConversations,
   formatDailySummaries,
@@ -9,6 +8,11 @@ import {
 import type { DailySummary } from "../db/dailySummary.js";
 import type { WeeklySummary } from "../db/weeklySummary.js";
 import type { ProfileRow } from "../db/userProfile.js";
+import { fetchActiveProfile } from "../db/userProfile.js";
+
+vi.mock("../db/userProfile.js", () => ({
+  fetchActiveProfile: vi.fn(),
+}));
 
 const TEST_PREFIX = "__test_load_";
 
@@ -81,20 +85,13 @@ describe("formatWeeklySummaries", () => {
 });
 
 describe("getProfileSection", () => {
-  afterAll(async () => {
-    await db().from("user_profile").delete().like("observation", `${TEST_PREFIX}%`);
-  });
-
-  it("returns empty when no active rows", async () => {
-    // delete first to ensure isolation
-    await db().from("user_profile").delete().like("observation", `${TEST_PREFIX}%`);
+  it("returns empty string when fetchActiveProfile returns no rows", async () => {
+    vi.mocked(fetchActiveProfile).mockResolvedValueOnce([]);
     const out = await getProfileSection(30);
-    // may be non-empty if other data exists in DB; just check format
-    expect(typeof out).toBe("string");
+    expect(out).toBe("");
   });
 
-  it("formats inline kind prefix", () => {
-    // pure-format helper (we'll add it if not yet)
+  it("formats inline kind prefix from fetched rows", async () => {
     const rows: ProfileRow[] = [
       {
         id: "1",
@@ -115,8 +112,14 @@ describe("getProfileSection", () => {
         updated_at: "",
       },
     ];
-    const lines = rows.map((r) => `- (${r.kind}) ${r.observation}`).join("\n");
-    expect(lines).toContain("(preference)");
-    expect(lines).toContain("(tone)");
+    vi.mocked(fetchActiveProfile).mockResolvedValueOnce(rows);
+    const out = await getProfileSection(30);
+    // Expected order: oldest first (slice().reverse() in impl)
+    // Input is rows[0]=preference, rows[1]=tone (newest first, since fetchActiveProfile returns desc)
+    // Reverse → tone first, then preference
+    expect(out).toContain("- (preference) 김밥 좋아함");
+    expect(out).toContain("- (tone) 회고 시작 톤은 늘 피곤함");
+    // Verify reverse order: tone line appears before preference line
+    expect(out.indexOf("- (tone)")).toBeLessThan(out.indexOf("- (preference)"));
   });
 });
