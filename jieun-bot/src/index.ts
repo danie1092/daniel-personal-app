@@ -6,12 +6,27 @@ import { AgentSdkClaude } from "./claude/agentSdk.js";
 import { runTrigger } from "./triggers/router.js";
 import { attachSchedule } from "./triggers/schedule.js";
 import { attachEvents } from "./triggers/event.js";
+import { muteFor, cancelMute } from "./db/botMute.js";
+import { sendToOwner } from "./telegram/send.js";
 
 const env = loadEnv();
 const logger = new Logger(env.LOG_DIR, "bot");
 const claude = new AgentSdkClaude();
 
 attachReceive(async (text, _ctx) => {
+  const trimmed = text.trim();
+  if (trimmed === "조용히") {
+    await muteFor(24);
+    await sendToOwner("응 24시간 조용히 있을게.", "system");
+    logger.info("manual mute set", { hours: 24 });
+    return;
+  }
+  if (trimmed === "취소") {
+    await cancelMute();
+    await sendToOwner("응 풀었어.", "system");
+    logger.info("manual mute cleared");
+    return;
+  }
   await runTrigger(claude, { trigger: "user", userPrompt: text });
 });
 
