@@ -25,7 +25,7 @@ export function formatRecentConversations(items: Conversation[]): string {
 function formatMd(date: string): string {
   // "2026-04-29" -> "4/29"
   const [, mm, dd] = date.split("-");
-  return `${parseInt(mm, 10)}/${parseInt(dd, 10)}`;
+  return `${parseInt(mm!, 10)}/${parseInt(dd!, 10)}`;
 }
 
 export function formatDailySummaries(items: DailySummary[]): string {

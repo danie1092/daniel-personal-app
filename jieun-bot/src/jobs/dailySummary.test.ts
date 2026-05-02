@@ -110,7 +110,7 @@ describe("runDailySummary integration (mock Claude)", () => {
     const rows = await fetchDailySummariesBetween(TEST_DATE, TEST_DATE);
     expect(rows.length).toBe(1);
     // fallback is built from data — just verify some non-empty text
-    expect(rows[0].summary.length).toBeGreaterThan(0);
+    expect(rows[0]!.summary.length).toBeGreaterThan(0);
   });
 
   it("falls back when Claude throws", async () => {

@@ -16,7 +16,7 @@ describe("dailySummary CRUD", () => {
     const rows = await fetchDailySummariesBetween("2023-12-31", "2024-01-02");
     const ours = rows.filter((r) => r.summary.startsWith(TEST_PREFIX));
     expect(ours).toHaveLength(1);
-    expect(ours[0].summary).toBe(`${TEST_PREFIX}second`);
+    expect(ours[0]!.summary).toBe(`${TEST_PREFIX}second`);
   });
 
   it("fetchDailySummariesBetween returns chronological", async () => {
