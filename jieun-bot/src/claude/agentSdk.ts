@@ -11,7 +11,8 @@ export class AgentSdkClaude implements ClaudeAdapter {
       options: {
         systemPrompt: input.systemPrompt,
         model: "sonnet",
-        maxTurns: 1,             // 단순 응답, 도구 없음
+        maxTurns: 3,             // event 트리거의 "침묵 OK" 지시처럼 결정 단계가 있으면 1턴은 부족.
+                                 // 도구 없으니 폭주 위험 없음. 자세한 분석은 git log d157381 이후 commit 참고.
         allowedTools: [],        // Block 1엔 도구 없음 — Block 2부터 추가
       },
     });
