@@ -69,3 +69,41 @@ describe("buildSystemPrompt — profile section", () => {
     expect(nowIdx).toBeGreaterThan(profileIdx);
   });
 });
+
+describe("buildSystemPrompt — retro section", () => {
+  it("includes retro section when scheduleKind=retro", () => {
+    const prompt = buildSystemPrompt({
+      trigger: "schedule",
+      scheduleKind: "retro",
+      now: new Date("2026-05-03T23:00:00+09:00"),
+      memorySection: "",
+      profileSection: "",
+      contextSection: "",
+    });
+    expect(prompt).toContain("[지금 회고 시간]");
+    expect(prompt).toContain("좋았던 점");
+  });
+
+  it("omits retro section for non-retro schedule", () => {
+    const prompt = buildSystemPrompt({
+      trigger: "schedule",
+      scheduleKind: "morning",
+      now: new Date("2026-05-03T08:00:00+09:00"),
+      memorySection: "",
+      profileSection: "",
+      contextSection: "",
+    });
+    expect(prompt).not.toContain("[지금 회고 시간]");
+  });
+
+  it("omits retro section for non-schedule triggers", () => {
+    const prompt = buildSystemPrompt({
+      trigger: "user",
+      now: new Date("2026-05-03T23:00:00+09:00"),
+      memorySection: "",
+      profileSection: "",
+      contextSection: "",
+    });
+    expect(prompt).not.toContain("[지금 회고 시간]");
+  });
+});

@@ -1,4 +1,5 @@
 import type { Trigger as DbTrigger } from "../db/conversations.js";
+import type { ScheduleKind } from "../telegram/send.js";
 
 /**
  * Triggers that the prompt builder handles. Excludes "system" — system messages
@@ -8,6 +9,7 @@ export type Trigger = Exclude<DbTrigger, "system">;
 
 export type PromptInput = {
   trigger: Trigger;
+  scheduleKind?: ScheduleKind;
   now: Date;
   memorySection: string;       // 24h raw + 30d daily + older weekly
   profileSection: string;      // user_profile 30개
@@ -161,8 +163,17 @@ const TRIGGER_LABELS: Record<Trigger, string> = {
   latent: "잠재 관찰 — 최근 데이터 훑고 발화/침묵 자체 판단",
 };
 
+const RETRO_SECTION = `
+[지금 회고 시간]
+좋았던 점 / 아쉬운 점 / 내일 한 가지 흐름.
+다영이 응할 때만 풀고 짧게 끝나도 OK.
+한 chunk 3-4문장. 최대 3 chunks.
+따라가는 질문은 1개 정도까지.
+시작 톤은 가볍게 ("테이블 앞이야?" 류).
+`.trim();
+
 export function buildSystemPrompt(input: PromptInput): string {
-  const { trigger, now, memorySection, profileSection, contextSection } = input;
+  const { trigger, scheduleKind, now, memorySection, profileSection, contextSection } = input;
   const fmt = new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul",
     dateStyle: "full",
@@ -191,6 +202,7 @@ export function buildSystemPrompt(input: PromptInput): string {
     profileSection ? `[다영에 대해 알게 된 것]\n${profileSection}` : "",
     `[지금]\n${nowSection}`,
     `[트리거: ${trigger}]\n${TRIGGER_LABELS[trigger]}`,
+    trigger === "schedule" && scheduleKind === "retro" ? RETRO_SECTION : "",
     memorySection ? `[메모리]\n${memorySection}` : "",
     contextSection ? `[현재 컨텍스트]\n${contextSection}` : "",
     `[지시]

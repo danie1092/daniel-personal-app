@@ -45,6 +45,7 @@ export async function runTrigger(
   const profileSection = await getProfileSection(30);
   const systemPrompt = buildSystemPrompt({
     trigger: ctx.trigger,
+    scheduleKind: ctx.scheduleKind,
     now: new Date(),
     memorySection,
     profileSection,
