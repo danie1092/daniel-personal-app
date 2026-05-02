@@ -12,8 +12,8 @@ describe("buildSystemPrompt", () => {
     });
     expect(p).toMatch(/이지은/);
     expect(p).toMatch(/다영/);
-    expect(p).toMatch(/일반 발화: 5문장 이내/);
-    expect(p).toMatch(/회고 대화: 10문장 이내/);
+    expect(p).toMatch(/일반 5문장 이내/);
+    expect(p).toMatch(/회고\(23:00\) 10/);
     expect(p).toMatch(/너는 챗봇이 아니다/);
     expect(p).toMatch(/같이 느끼/);
   });
