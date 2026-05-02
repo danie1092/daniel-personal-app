@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { runTrigger } from "./router.js";
 import { runDailySummary } from "../jobs/dailySummary.js";
+import { runWeeklySummary, thisSundayInKst } from "../jobs/weeklySummary.js";
 import { runLatentObservation } from "./latent.js";
 import type { ClaudeAdapter } from "../claude/adapter.js";
 import { Logger } from "../logger.js";
@@ -124,10 +125,22 @@ export function attachSchedule(claude: ClaudeAdapter): void {
     );
   }
 
+  // 주간 요약 — 일요일 23:59 (cron weekday 0=Sunday)
+  cron.schedule(
+    "59 23 * * 0",
+    () => {
+      const today = thisSundayInKst();
+      runWeeklySummary(claude, today).catch((err) =>
+        logger.error("weeklySummary job failed", { err: String(err) })
+      );
+    },
+    { timezone: "Asia/Seoul" }
+  );
+
   logger.info("schedule attached", {
     tasks: [
       "morning:08", "lunch:12:30", "evening_brief:20:30", "end_of_day:21",
-      "retro:23", "dailySummary:23:30", "latent:10/15/19:30",
+      "retro:23", "dailySummary:23:30", "latent:10/15/19:30", "weeklySummary:Sun23:59",
     ],
   });
 }
