@@ -179,26 +179,34 @@ export async function runDailySummary(claude: ClaudeAdapter, today: string): Pro
 
   for (const obs of parsed.new_observations) {
     if (!obs.observation || !obs.kind) continue;
-    const newId = await insertObservation({
-      kind: obs.kind,
-      observation: obs.observation,
-      evidence_dates: obs.evidence_dates?.length ? obs.evidence_dates : [today],
-    });
-    // re-fetch active (방금 INSERT 이전 시점)으로 비교
-    const activeForCompare = active.filter((a) => a.id !== newId);
-    const newRow: ProfileRow = {
-      id: newId,
-      kind: obs.kind,
-      observation: obs.observation,
-      evidence_dates: obs.evidence_dates ?? [today],
-      superseded_by: null,
-      created_at: "",
-      updated_at: "",
-    };
     try {
-      await consolidateNewObservation(claude, newRow, activeForCompare, today);
+      const newId = await insertObservation({
+        kind: obs.kind,
+        observation: obs.observation,
+        evidence_dates: obs.evidence_dates?.length ? obs.evidence_dates : [today],
+      });
+      const newRow: ProfileRow = {
+        id: newId,
+        kind: obs.kind,
+        observation: obs.observation,
+        evidence_dates: obs.evidence_dates ?? [today],
+        superseded_by: null,
+        created_at: "",
+        updated_at: "",
+      };
+      try {
+        await consolidateNewObservation(claude, newRow, active, today);
+      } catch (err) {
+        logger.warn("consolidate failed, leaving raw", { newId, err: String(err) });
+      }
     } catch (err) {
-      logger.warn("consolidate failed, leaving raw", { newId, err: String(err) });
+      // insertObservation can throw on DB CHECK constraint (invalid kind), etc.
+      // Log + skip this observation. Don't kill the whole cron.
+      logger.warn("insertObservation failed, skipping", {
+        kind: obs.kind,
+        observation: obs.observation?.slice(0, 80),
+        err: String(err),
+      });
     }
   }
 }
