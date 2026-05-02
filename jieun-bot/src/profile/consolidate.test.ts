@@ -41,11 +41,11 @@ describe("findConflictCandidates", () => {
     row("c", "tone", "회고 시작 톤은 늘 피곤함"),
   ];
 
-  it("matches same kind only with similarity >= 0.5", () => {
+  it("matches same kind when similarity >= threshold", () => {
     const newRow = row("new", "preference", "외식 좋아함 그치만 도파민 소비도");
-    // active 'a': ["외식","좋아함"] vs new ["외식","좋아함","그치만","도파민","소비도"]
-    // intersection 2, union 5, similarity = 0.4 → not match
-    // raise threshold to demonstrate kind filter:
+    // active 'a' tokens: ["외식","좋아함"]
+    // new tokens: ["외식","좋아함","그치만","도파민","소비도"]
+    // intersection 2, union 5 → similarity 0.4 (above the 0.3 threshold passed below)
     const matches = findConflictCandidates(newRow, active, 0.3);
     expect(matches.map((m) => m.id)).toEqual(["a"]);
   });

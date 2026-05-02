@@ -81,6 +81,10 @@ export async function decideMerge(
   }
   try {
     const parsed = JSON.parse(jsonMatch[0]) as MergeAction;
+    if (parsed.action !== "keep_old" && parsed.action !== "replace" && parsed.action !== "merge") {
+      logger.warn("decideMerge: unknown action, defaulting keep_old", { action: (parsed as { action: unknown }).action });
+      return { action: "keep_old" };
+    }
     if (parsed.action === "merge" && !parsed.merged_text) {
       logger.warn("decideMerge: merge without merged_text, defaulting keep_old");
       return { action: "keep_old" };
@@ -107,15 +111,25 @@ export async function consolidateNewObservation(
   const conflicts = findConflictCandidates(newRow, active);
   if (conflicts.length === 0) return;
 
+  let replaced = false;
+
   for (const conflict of conflicts) {
     const decision = await decideMerge(claude, conflict.observation, newRow.observation);
     if (decision.action === "keep_old") {
+      if (replaced) {
+        logger.warn("consolidate: keep_old after prior replace — skipping delete to preserve replace", {
+          oldId: conflict.id,
+          newId: newRow.id,
+        });
+        return;
+      }
       await deleteObservation(newRow.id);
       logger.info("consolidate: keep_old", { oldId: conflict.id, droppedNewId: newRow.id });
-      return; // 신규 사라졌으니 더 비교할 필요 없음
+      return;
     }
     if (decision.action === "replace") {
       await supersede(conflict.id, newRow.id);
+      replaced = true;
       logger.info("consolidate: replace", { oldId: conflict.id, newId: newRow.id });
       continue;
     }
@@ -132,7 +146,7 @@ export async function consolidateNewObservation(
         newId: newRow.id,
         mergedId,
       });
-      return; // 신규 → merged로 supersede 됐으니 종료
+      return;
     }
   }
 }
