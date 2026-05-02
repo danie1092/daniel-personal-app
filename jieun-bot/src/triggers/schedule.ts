@@ -14,6 +14,7 @@ export function attachSchedule(claude: ClaudeAdapter): void {
     () => {
       runTrigger(claude, {
         trigger: "schedule",
+        scheduleKind: "lunch",
         userPrompt:
           "지금은 점심 12:30. 다영이 끼니를 잘 못 챙긴다는 점을 알고 있지. " +
           "점심 챙겼는지 가볍게 물어보고 싶으면 한마디. " +
@@ -29,6 +30,7 @@ export function attachSchedule(claude: ClaudeAdapter): void {
     () => {
       runTrigger(claude, {
         trigger: "schedule",
+        scheduleKind: "morning",
         userPrompt:
           "지금은 아침 08:00. 다영의 하루 시작 전. " +
           "어제 못 한 거 가볍게 환기하거나 좋은 아침 인사. " +
@@ -45,6 +47,7 @@ export function attachSchedule(claude: ClaudeAdapter): void {
     () => {
       runTrigger(claude, {
         trigger: "schedule",
+        scheduleKind: "evening_brief",
         userPrompt:
           "지금은 20:30. 다영의 퇴근 직전. " +
           "캘린더 데이터는 Block 3에서 추가 — 지금은 가벼운 안부. " +
@@ -60,6 +63,7 @@ export function attachSchedule(claude: ClaudeAdapter): void {
     () => {
       runTrigger(claude, {
         trigger: "schedule",
+        scheduleKind: "end_of_day",
         userPrompt:
           "지금은 21:00. 다영의 퇴근 시간 즈음. " +
           "'오늘 길었지, 퇴근했어?' 정도 가볍게. 답 없으면 그냥 넘어감. 침묵 OK.",
@@ -74,6 +78,7 @@ export function attachSchedule(claude: ClaudeAdapter): void {
     () => {
       runTrigger(claude, {
         trigger: "schedule",
+        scheduleKind: "retro",
         userPrompt:
           "지금은 23:00. 다영이 집에 와서 테이블 앞에 앉을 시간. " +
           "가볍게 '테이블 앞이야?' 같은 노크. " +

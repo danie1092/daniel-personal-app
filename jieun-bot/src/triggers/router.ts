@@ -2,6 +2,7 @@ import type { Trigger } from "../db/conversations.js";
 import type { ClaudeAdapter } from "../claude/adapter.js";
 import { buildSystemPrompt } from "../persona/prompt.js";
 import { sendToOwner } from "../telegram/send.js";
+import type { ScheduleKind } from "../telegram/send.js";
 import { loadMemorySection, getProfileSection } from "../memory/load.js";
 import { Logger } from "../logger.js";
 import { loadEnv } from "../env.js";
@@ -14,6 +15,7 @@ const logger = new Logger(loadEnv().LOG_DIR, "bot");
 
 export type TriggerContext = {
   trigger: Exclude<Trigger, "system">;
+  scheduleKind?: ScheduleKind;  // schedule 트리거에서만 의미 있음
   userPrompt: string;          // 트리거의 질문 / 다영 메시지 / 컨텍스트
   contextSection?: string;     // 시그널 후보 등 (Block 3에서 채움)
   signalCandidateIds?: string[]; // event 트리거에서 발화 성공 시 mark 대상
@@ -56,7 +58,7 @@ export async function runTrigger(
       logger.warn("actions parse error", { trigger: ctx.trigger, parseError });
     }
     if (cleanText) {
-      await sendToOwner(cleanText, ctx.trigger);
+      await sendToOwner(cleanText, ctx.trigger, ctx.scheduleKind);
       if (ctx.signalCandidateIds?.length) {
         for (const id of ctx.signalCandidateIds) {
           try {
