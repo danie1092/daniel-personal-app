@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { runTrigger } from "./router.js";
+import { runDailySummary } from "../jobs/dailySummary.js";
 import type { ClaudeAdapter } from "../claude/adapter.js";
 import { Logger } from "../logger.js";
 import { loadEnv } from "../env.js";
@@ -83,7 +84,24 @@ export function attachSchedule(claude: ClaudeAdapter): void {
     { timezone: "Asia/Seoul" }
   );
 
+  // 일일 요약 23:30 — 회고 마무리 후 그날 정리. user_profile 누적도 같은 잡.
+  cron.schedule(
+    "30 23 * * *",
+    () => {
+      const today = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date()); // 'YYYY-MM-DD'
+      runDailySummary(claude, today).catch((err) =>
+        logger.error("dailySummary job failed", { err: String(err) })
+      );
+    },
+    { timezone: "Asia/Seoul" }
+  );
+
   logger.info("schedule attached", {
-    tasks: ["morning:08", "lunch:12:30", "evening_brief:20:30", "end_of_day:21", "retro:23"],
+    tasks: ["morning:08", "lunch:12:30", "evening_brief:20:30", "end_of_day:21", "retro:23", "dailySummary:23:30"],
   });
 }
