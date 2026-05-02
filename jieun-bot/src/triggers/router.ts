@@ -2,7 +2,7 @@ import type { Trigger } from "../db/conversations.js";
 import type { ClaudeAdapter } from "../claude/adapter.js";
 import { buildSystemPrompt } from "../persona/prompt.js";
 import { sendToOwner } from "../telegram/send.js";
-import { loadMemorySection } from "../memory/load.js";
+import { loadMemorySection, getProfileSection } from "../memory/load.js";
 import { Logger } from "../logger.js";
 import { loadEnv } from "../env.js";
 import { parseActions } from "../claude/actions.js";
@@ -40,11 +40,12 @@ export async function runTrigger(
   }
 
   const memorySection = await loadMemorySection(24);
+  const profileSection = await getProfileSection(30);
   const systemPrompt = buildSystemPrompt({
     trigger: ctx.trigger,
     now: new Date(),
     memorySection,
-    profileSection: "",          // Block 4
+    profileSection,
     contextSection: ctx.contextSection ?? "",
   });
 

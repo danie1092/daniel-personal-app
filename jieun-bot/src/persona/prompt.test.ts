@@ -29,3 +29,43 @@ describe("buildSystemPrompt", () => {
     expect(p).toMatch(/트리거: latent/);
   });
 });
+
+describe("buildSystemPrompt — profile section", () => {
+  it("omits profile section when empty", () => {
+    const prompt = buildSystemPrompt({
+      trigger: "user",
+      now: new Date("2026-05-03T10:00:00+09:00"),
+      memorySection: "",
+      profileSection: "",
+      contextSection: "",
+    });
+    expect(prompt).not.toContain("[다영에 대해 알게 된 것]");
+  });
+
+  it("includes profile section when present", () => {
+    const prompt = buildSystemPrompt({
+      trigger: "user",
+      now: new Date("2026-05-03T10:00:00+09:00"),
+      memorySection: "",
+      profileSection: "- (preference) 김밥 좋아함\n- (tone) 회고 시작 톤은 늘 피곤함",
+      contextSection: "",
+    });
+    expect(prompt).toContain("[다영에 대해 알게 된 것]");
+    expect(prompt).toContain("(preference) 김밥 좋아함");
+    expect(prompt).toContain("(tone) 회고 시작 톤은 늘 피곤함");
+  });
+
+  it("places profile section before [지금]", () => {
+    const prompt = buildSystemPrompt({
+      trigger: "user",
+      now: new Date("2026-05-03T10:00:00+09:00"),
+      memorySection: "",
+      profileSection: "- (pattern) X",
+      contextSection: "",
+    });
+    const profileIdx = prompt.indexOf("[다영에 대해 알게 된 것]");
+    const nowIdx = prompt.indexOf("[지금]");
+    expect(profileIdx).toBeGreaterThan(-1);
+    expect(nowIdx).toBeGreaterThan(profileIdx);
+  });
+});
