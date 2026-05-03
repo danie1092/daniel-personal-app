@@ -1,8 +1,10 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { loadEnv } from "../env.js";
+import { Logger } from "../logger.js";
 
 const execFileP = promisify(execFile);
+const logger = new Logger(loadEnv().LOG_DIR, "bot");
 
 export type CalendarEvent = {
   uid: string;
@@ -17,7 +19,8 @@ export type FetchRange = {
   to: string;
 };
 
-const SEP = "|||";
+// ASCII unit-separator. 캘린더 제목에 들어갈 일 없어 collision 안전.
+const SEP = "\x1f";
 
 /**
  * icalBuddy로 개인 캘린더 일정만 가져온다. Google 업무 캘린더 절대 X.
@@ -52,9 +55,15 @@ function parseIcalBuddyOutput(stdout: string): CalendarEvent[] {
 
   for (const line of lines) {
     const fields = line.split(SEP);
-    if (fields.length !== 5) continue;
+    if (fields.length !== 5) {
+      logger.warn("calendar/read: dropped malformed line", { fieldCount: fields.length, sample: line.slice(0, 80) });
+      continue;
+    }
     const [uid, title, date, startTime, endTime] = fields as [string, string, string, string, string];
-    if (!uid || !title || !date) continue;
+    if (!uid || !title || !date) {
+      logger.warn("calendar/read: dropped line with empty required field", { hasUid: !!uid, hasTitle: !!title, hasDate: !!date });
+      continue;
+    }
     events.push({ uid, title, date, startTime, endTime });
   }
   return events;

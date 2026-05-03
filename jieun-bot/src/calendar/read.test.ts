@@ -37,7 +37,7 @@ beforeEach(() => {
 describe("calendar/read.ts", () => {
   it("parses single event line", async () => {
     execFileMock.mockImplementation((_cmd, _args, cb) => {
-      cb(null, "AAAA-1111|||ABC 회의|||2026-05-04|||15:00|||16:00\n");
+      cb(null, "AAAA-1111\x1fABC 회의\x1f2026-05-04\x1f15:00\x1f16:00\n");
     });
 
     const events = await fetchEvents({ from: "2026-05-04", to: "2026-05-04" });
@@ -61,7 +61,7 @@ describe("calendar/read.ts", () => {
 
   it("ignores malformed lines without 5 fields", async () => {
     execFileMock.mockImplementation((_cmd, _args, cb) => {
-      cb(null, "BAD-LINE\nAAAA|||OK|||2026-05-04|||10:00|||11:00\n");
+      cb(null, "BAD-LINE\nAAAA\x1fOK\x1f2026-05-04\x1f10:00\x1f11:00\n");
     });
     const events = await fetchEvents({ from: "2026-05-04", to: "2026-05-04" });
     expect(events).toHaveLength(1);
