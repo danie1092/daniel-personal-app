@@ -107,3 +107,30 @@ describe("buildSystemPrompt — retro section", () => {
     expect(prompt).not.toContain("[지금 회고 시간]");
   });
 });
+
+describe("calendar rules section", () => {
+  const baseInput = {
+    now: new Date("2026-05-03T14:00:00+09:00"),
+    memorySection: "",
+    profileSection: "",
+    contextSection: "",
+  };
+
+  it("includes calendar rules on user trigger", () => {
+    const prompt = buildSystemPrompt({ ...baseInput, trigger: "user" });
+    expect(prompt).toContain("propose_calendar_event");
+    expect(prompt).toContain("user 트리거에서만");
+  });
+
+  it("excludes calendar rules on schedule trigger", () => {
+    const prompt = buildSystemPrompt({ ...baseInput, trigger: "schedule", scheduleKind: "morning" });
+    expect(prompt).not.toContain("propose_calendar_event");
+  });
+
+  it("excludes calendar rules on event/latent trigger", () => {
+    const prompt = buildSystemPrompt({ ...baseInput, trigger: "event" });
+    expect(prompt).not.toContain("propose_calendar_event");
+    const latent = buildSystemPrompt({ ...baseInput, trigger: "latent" });
+    expect(latent).not.toContain("propose_calendar_event");
+  });
+});

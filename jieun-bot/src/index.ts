@@ -1,4 +1,4 @@
-import { bot } from "./telegram/bot.js";
+import { bot, ownerChatId } from "./telegram/bot.js";
 import { attachReceive } from "./telegram/receive.js";
 import { Logger } from "./logger.js";
 import { loadEnv } from "./env.js";
@@ -13,7 +13,7 @@ const env = loadEnv();
 const logger = new Logger(env.LOG_DIR, "bot");
 const claude = new AgentSdkClaude();
 
-attachReceive(async (text, _ctx) => {
+attachReceive(async (text, ctx) => {
   const trimmed = text.trim();
   if (trimmed === "조용히") {
     await muteFor(24);
@@ -27,7 +27,14 @@ attachReceive(async (text, _ctx) => {
     logger.info("manual mute cleared");
     return;
   }
-  await runTrigger(claude, { trigger: "user", userPrompt: text });
+  // ctx.chat is technically optional in grammy types but message:text always
+  // carries chat. Fall back to OWNER chat id (only owner messages reach here
+  // due to attachReceive's isOwnerChatId guard).
+  await runTrigger(claude, {
+    trigger: "user",
+    userPrompt: text,
+    chatId: ctx.chat?.id ?? ownerChatId(),
+  });
 });
 
 attachSchedule(claude);

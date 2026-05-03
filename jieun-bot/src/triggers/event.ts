@@ -6,6 +6,7 @@ import { computeSignals } from "../signals/compute.js";
 import { recordCandidate } from "../db/botSignals.js";
 import { runTrigger } from "./router.js";
 import type { SignalCandidate } from "../signals/types.js";
+import { ownerChatId } from "../telegram/bot.js";
 
 const logger = new Logger(loadEnv().LOG_DIR, "bot");
 
@@ -63,6 +64,7 @@ export function attachEvents(claude: ClaudeAdapter): void {
 
           await runTrigger(claude, {
             trigger: "event",
+            chatId: ownerChatId(),
             userPrompt: `데이터 변화 감지. 아래 시그널을 보고 다영에게 한마디 건넬 만한지 판단. 답이 없을 수도 있으니 부담 없이. 침묵 OK.\n\n${contextSection}`,
             contextSection,
             signalCandidateIds: ids,

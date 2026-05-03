@@ -156,6 +156,54 @@ date_offset(0=오늘, -1=어제 등).
 카드/결제수단은 "기타"로 시스템이 채움 — 다영이 가계부 페이지에서 분류.
 `.trim();
 
+const CALENDAR_RULES = `
+[캘린더 액션 — user 트리거에서만, 다영의 *명시 발화*에서만]
+
+다영이 *지금 메시지에서* 일정을 명시한 경우만 propose. 메모리(이전 대화)에서 끌어다 propose 금지 — phantom 등록.
+
+[등록 흐름]
+다영: "내일 3시 ABC" / "5/4 오후에 미용실"
+→ 자연어 응답에 "내일 5/4(월) 15:00 ABC, 등록할까?" 같이 다영의 표현을 *구체적 시각으로 풀어서* 확인 발화.
+→ 동시에 <actions>에 propose_calendar_event emit.
+
+   {"kind":"propose_calendar_event","title":"ABC","start":"2026-05-04T15:00:00+09:00","end":"2026-05-04T16:00:00+09:00"}
+
+   - start/end는 KST (+09:00) ISO 8601. 위 *지금* 섹션의 어제/내일·요일 그대로 사용. 자체 계산 X.
+   - 끝 시각이 명시 안 됐으면 1시간 default. 다영이 명시했으면 그대로.
+   - 시각이 모호 ("오후") 하면 다영에게 시각 한 번 더 물어보고 propose 미루기.
+
+다영: "응" / "ㅇㅇ" / "등록" / "yes"
+→ "넣어뒀어" 류 짧은 응답 + <actions>에 confirm_calendar_action emit.
+
+다영: "아냐" / "취소" / "됐어"
+→ "그래 안 할게" 류 응답 + <actions>에 cancel_calendar_action emit.
+
+다영: "5시로 바꿔" / 새로운 시각
+→ propose_calendar_event 다시 emit (LIFO로 기존 pending 덮음).
+
+[삭제 흐름 — 봇이 등록한 일정만]
+다영: "방금 거 취소" / "내일 ABC 빼줘"
+→ [현재 컨텍스트]에 박힌 후보(\`삭제 후보\`)에서 *정확히 1개* 매칭되면 propose_calendar_delete.
+   {"kind":"propose_calendar_delete","targetUid":"<uid from context>","display":"내일 15:00 ABC"}
+→ 자연어로 "내일 5/4(월) 15:00 ABC, 지울까?" 확인.
+
+후보 0개 (봇이 등록한 게 아님): "그건 내가 등록한 게 아니라서 직접 지워줘" — propose 금지.
+후보 2+개: 자연어로 "(1) 15:00 ABC회의 (2) 17:00 ABC 후속, 어떤 거?" — 이번 턴엔 propose 금지.
+다영의 다음 턴에서 ("1번") 그 후보로 propose_calendar_delete.
+
+[pending 있을 때 시점]
+[현재 컨텍스트]에 "지금 pending: ..." 보이면 다영의 응답이 confirm/cancel/수정 중 하나일 가능성 높음.
+- "응"/"네"/"ㅇㅇ" 류 → confirm_calendar_action
+- "아냐"/"취소"/"됐어" → cancel_calendar_action
+- 다른 시각/제목 → propose_calendar_event 다시 (LIFO)
+- 무관한 다른 화제 → 그냥 자연어 응답, action 없음 (pending 5분 후 자동 expire)
+
+[절대 룰]
+- 봇 *자율* 일정 제안 X (산책/식사 등 봇 발 시작 일정).
+- schedule/event/latent 트리거에서 캘린더 액션 emit 절대 X — user 트리거 only (자율 기록 룰과 동일).
+- propose 후 *자율* confirm 호출 X — 다영의 명시 응답 후에만 confirm.
+`.trim();
+
 const TRIGGER_LABELS: Record<Trigger, string> = {
   schedule: "정해진 시각 (브리핑/노크/회고)",
   event: "데이터 변경 이벤트 (가계부 INSERT, 메모 추가 등)",
@@ -199,6 +247,7 @@ export function buildSystemPrompt(input: PromptInput): string {
 
   return [
     CORE,
+    trigger === "user" ? CALENDAR_RULES : "",
     profileSection ? `[다영에 대해 알게 된 것]\n${profileSection}` : "",
     `[지금]\n${nowSection}`,
     `[트리거: ${trigger}]\n${TRIGGER_LABELS[trigger]}`,

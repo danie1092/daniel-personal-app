@@ -12,6 +12,7 @@ import { isInSilenceWindow } from "./silenceWindow.js";
 import { markFired } from "../db/botSignals.js";
 import { isMuted } from "../db/botMute.js";
 import { shouldBackoff } from "./backoff.js";
+import { getPending } from "../calendar/pending.js";
 
 const logger = new Logger(loadEnv().LOG_DIR, "bot");
 
@@ -21,6 +22,7 @@ export type TriggerContext = {
   userPrompt: string;          // 트리거의 질문 / 다영 메시지 / 컨텍스트
   contextSection?: string;     // 시그널 후보 등 (Block 3에서 채움)
   signalCandidateIds?: string[]; // event 트리거에서 발화 성공 시 mark 대상
+  chatId: number;              // 캘린더 pending Map key (per-user). 보통 OWNER chat id.
 };
 
 /**
@@ -55,13 +57,32 @@ export async function runTrigger(
 
   const memorySection = await loadMemorySection(24);
   const profileSection = await getProfileSection(30);
+
+  // pending hint 주입 — user 트리거 only. Claude가 다영의 응답을
+  // confirm/cancel/수정 중 어느 쪽인지 판단할 컨텍스트 제공.
+  let pendingHint = "";
+  if (ctx.trigger === "user") {
+    const p = getPending(ctx.chatId);
+    if (p) {
+      if (p.kind === "register") {
+        pendingHint = `[지금 pending — 등록 제안]\n${p.title} ${p.start} ~ ${p.end}\n다영의 응답이 confirm/cancel/수정인지 잘 보고 액션 emit.`;
+      } else {
+        pendingHint = `[지금 pending — 삭제 제안]\n${p.display} (uid=${p.targetUid})\n다영의 응답이 confirm/cancel인지 잘 보고 액션 emit.`;
+      }
+    }
+  }
+
+  const combinedContext = [pendingHint, ctx.contextSection ?? ""]
+    .filter(Boolean)
+    .join("\n\n");
+
   const systemPrompt = buildSystemPrompt({
     trigger: ctx.trigger,
     scheduleKind: ctx.scheduleKind,
     now: new Date(),
     memorySection,
     profileSection,
-    contextSection: ctx.contextSection ?? "",
+    contextSection: combinedContext,
   });
 
   try {
@@ -83,7 +104,7 @@ export async function runTrigger(
       }
     }
     if (actions.length > 0) {
-      await executeActions(actions);
+      await executeActions(actions, ctx.chatId);
       logger.info("actions executed", { trigger: ctx.trigger, count: actions.length });
     }
     logger.info("trigger ran", {
