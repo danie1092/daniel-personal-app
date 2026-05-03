@@ -9,7 +9,34 @@ const BudgetInsertSchema = z.object({
   date_offset: z.number().int().min(-7).max(0).default(0),
 });
 
-export const ActionSchema = z.discriminatedUnion("kind", [BudgetInsertSchema]);
+const ProposeCalendarEventSchema = z.object({
+  kind: z.literal("propose_calendar_event"),
+  title: z.string().min(1),
+  start: z.string().min(1),
+  end: z.string().min(1),
+});
+
+const ProposeCalendarDeleteSchema = z.object({
+  kind: z.literal("propose_calendar_delete"),
+  targetUid: z.string().min(1),
+  display: z.string().min(1),
+});
+
+const ConfirmCalendarActionSchema = z.object({
+  kind: z.literal("confirm_calendar_action"),
+});
+
+const CancelCalendarActionSchema = z.object({
+  kind: z.literal("cancel_calendar_action"),
+});
+
+export const ActionSchema = z.discriminatedUnion("kind", [
+  BudgetInsertSchema,
+  ProposeCalendarEventSchema,
+  ProposeCalendarDeleteSchema,
+  ConfirmCalendarActionSchema,
+  CancelCalendarActionSchema,
+]);
 export type Action = z.infer<typeof ActionSchema>;
 
 export type ParseResult = {

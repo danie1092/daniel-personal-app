@@ -50,10 +50,18 @@ export async function executeActions(actions: Action[]): Promise<void> {
           notes: `${a.memo} ${a.amount.toLocaleString()}원 (${a.category}, ${a.type}, ${date})`,
         });
         logger.info("action: budget_insert", { id: data.id, amount: a.amount, category: a.category });
+      } else if (
+        a.kind === "propose_calendar_event" ||
+        a.kind === "propose_calendar_delete" ||
+        a.kind === "confirm_calendar_action" ||
+        a.kind === "cancel_calendar_action"
+      ) {
+        // TODO Task 3.13 — wire pending Map + AppleScript dispatch here
+        logger.info("calendar action received — Task 3.13 will dispatch", { kind: a.kind });
       } else {
         // exhaustive check — ensures TS errors when new Action kinds added without a handler
-        const _exhaustive: never = a.kind;
-        logger.warn("unknown action kind", { kind: (a as { kind: string }).kind });
+        const _exhaustive: never = a;
+        logger.warn("unknown action kind", { kind: (_exhaustive as { kind: string }).kind });
       }
     } catch (err) {
       // err가 Supabase PostgrestError나 일반 Error일 수 있음 — 메시지/코드 추출
