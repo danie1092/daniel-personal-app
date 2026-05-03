@@ -35,6 +35,51 @@ claude login
 ### Telegram Bot Token 갱신
 BotFather (@BotFather) → `/mybots` → 토큰 revoke + 새 토큰 → `jieun-bot/.env`의 `TELEGRAM_BOT_TOKEN` 교체 → 봇 reload.
 
+## 캘린더 (Block 3b)
+
+### 첫 배포 1회 setup
+
+**환경변수**:
+1. Mac mini Calendar.app 열어서 좌측 sidebar의 *개인 캘린더* 정확한 이름 확인 (예: "다영의 개인", "Personal").
+2. `jieun-bot/.env`에 추가:
+   ```
+   JIEUN_CALENDAR_INCLUDE=다영의 개인
+   ```
+   (Google 업무 캘린더 절대 X — Block 3b spec D1 보안 룰.)
+
+**TCC 권한** (다영 GUI 세션 터미널에서):
+1. `icalBuddy eventsToday` → "캘린더에 접근하려고 합니다" 프롬프트 → "허용"
+2. `osascript -e 'tell application "Calendar" to count of calendars'` → "Terminal이 Calendar.app을 제어하려고 합니다" → "허용"
+3. 봇 reload: `launchctl unload -w launchd/kr.daniel.jieun.plist && launchctl load -w launchd/kr.daniel.jieun.plist`
+4. 텔레그램에 `내일 오후 9시 권한테스트 등록해줘` 발화 → 확인 발화 → "응" → Calendar.app에 일정 보이면 OK.
+
+**launchd 컨텍스트에서 권한 못 받는 경우** (osascript silent fail):
+- `launchd/kr.daniel.jieun.plist`에 추가:
+  ```xml
+  <key>LimitLoadToSessionType</key>
+  <string>Aqua</string>
+  ```
+- 다시 reload. GUI 세션의 권한이 상속되어야 함.
+
+### 권한 reset 감지 (운영 중)
+
+봇이 `osascript`/`icalBuddy`를 권한 부족으로 fail하면 텔레그램에 1회 안내 (`(캘린더 못 건드렸어 — 권한 끊겼나?)`). 이후 auto-backoff(연속 발화 3회) silent.
+
+수동 복구:
+1. Mac mini에서 시스템 환경설정 → 개인정보보호 → 자동화 또는 캘린더 항목 확인.
+2. Terminal / osascript / icalBuddy 항목 토글 "허용".
+3. 봇 reload.
+4. 텔레그램 `테스트` 발화로 검증.
+
+### 트러블슈팅
+
+| 증상 | 원인 가능성 | 처리 |
+|---|---|---|
+| 봇이 propose 후 confirm 했는데 일정 안 뜸 | TCC 권한 reset | 위 *수동 복구* |
+| 등록 일정의 시간이 1시간 어긋남 | Mac mini 시스템 시간대가 KST 아님 | `sudo systemsetup -settimezone Asia/Seoul` |
+| 잘못된 일정이 등록됨 | Claude 자연어 파싱 오류 | 다영이 *확인 단계*에서 "아냐" → drop. 패턴 누적되면 페르소나 prompt 보강 |
+| `/bot-log`에 apple_calendar row가 안 보임 | bot_writes write 실패 | 로그 확인 (`tail logs/bot.log`) |
+
 ## mute 수동 제어 (텔레그램 안 통할 때)
 
 ```sql

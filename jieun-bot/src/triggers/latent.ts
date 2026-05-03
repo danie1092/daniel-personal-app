@@ -5,6 +5,7 @@ import { loadMemorySection, getProfileSection } from "../memory/load.js";
 import { buildSystemPrompt } from "../persona/prompt.js";
 import { sendToOwner } from "../telegram/send.js";
 import { isInSilenceWindow } from "./silenceWindow.js";
+import { latentSnapshot } from "../calendar/context.js";
 import { Logger } from "../logger.js";
 import { loadEnv } from "../env.js";
 
@@ -94,12 +95,23 @@ export async function runLatentObservation(claude: ClaudeAdapter): Promise<void>
   const profileSection = await getProfileSection(30);
   const signalsBlock = candidates.length > 0 ? evidenceToContext(candidates) : "(시그널 없음)";
 
+  let calendarHint = "";
+  try {
+    calendarHint = await latentSnapshot(new Date());
+  } catch (err) {
+    logger.warn("latent calendar snapshot failed", { err: String(err) });
+  }
+
+  const contextSection = [`[활성 시그널]\n${signalsBlock}`, calendarHint]
+    .filter((s) => s && s.length > 0)
+    .join("\n\n");
+
   const systemPrompt = buildSystemPrompt({
     trigger: "latent",
     now: new Date(),
     memorySection,
     profileSection,
-    contextSection: `[활성 시그널]\n${signalsBlock}`,
+    contextSection,
   });
 
   const userPrompt = `${LATENT_SYSTEM_DIRECTIVE}\n\n위 컨텍스트로 JSON 출력:`;

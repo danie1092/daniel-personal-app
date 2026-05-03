@@ -7,6 +7,7 @@ import type { ClaudeAdapter } from "../claude/adapter.js";
 import { Logger } from "../logger.js";
 import { loadEnv } from "../env.js";
 import { ownerChatId } from "../telegram/bot.js";
+import { briefingForToday, briefingForTomorrow } from "../calendar/context.js";
 
 const logger = new Logger(loadEnv().LOG_DIR, "bot");
 
@@ -28,36 +29,49 @@ export function attachSchedule(claude: ClaudeAdapter): void {
     { timezone: "Asia/Seoul" }
   );
 
-  // 아침 08:00 KST — 가벼운 인사 / 어제 환기
+  // 아침 08:00 KST — 오늘 캘린더 + 가벼운 인사
   cron.schedule(
     "0 8 * * *",
-    () => {
+    async () => {
+      let calendarSection = "";
+      try {
+        calendarSection = await briefingForToday(new Date());
+      } catch (err) {
+        logger.warn("calendar briefing failed (morning)", { err: String(err) });
+      }
       runTrigger(claude, {
         trigger: "schedule",
         scheduleKind: "morning",
         chatId: ownerChatId(),
+        contextSection: calendarSection,
         userPrompt:
           "지금은 아침 08:00. 다영의 하루 시작 전. " +
-          "어제 못 한 거 가볍게 환기하거나 좋은 아침 인사. " +
-          "캘린더 데이터는 Block 3에서 추가될 예정 — 지금은 일정 언급 X. " +
-          "짧게 한두 문장. 침묵해도 OK.",
+          "[현재 컨텍스트]에 오늘 캘린더가 박혀 있으면 *맥락 있는 한마디*로 풀어 (예: '오후 3시 ABC 있네 — 점심 미리 챙겨'). " +
+          "일정 없으면 가벼운 인사 또는 어제 환기. 짧게. 침묵 OK.",
       }).catch((err) => logger.error("morning brief failed", { err: String(err) }));
     },
     { timezone: "Asia/Seoul" }
   );
 
-  // 퇴근 직전 20:30 KST — 내일 챙길 거 (Block 3 캘린더 연동 전엔 가벼운 안부)
+  // 퇴근 직전 20:30 KST — 내일 캘린더 미리 짚기
   cron.schedule(
     "30 20 * * *",
-    () => {
+    async () => {
+      let calendarSection = "";
+      try {
+        calendarSection = await briefingForTomorrow(new Date());
+      } catch (err) {
+        logger.warn("calendar briefing failed (evening)", { err: String(err) });
+      }
       runTrigger(claude, {
         trigger: "schedule",
         scheduleKind: "evening_brief",
         chatId: ownerChatId(),
+        contextSection: calendarSection,
         userPrompt:
           "지금은 20:30. 다영의 퇴근 직전. " +
-          "캘린더 데이터는 Block 3에서 추가 — 지금은 가벼운 안부. " +
-          "침묵 OK.",
+          "[현재 컨텍스트]에 내일 캘린더가 있으면 가볍게 짚어 (예: '내일 1시 회의 있네'). " +
+          "없으면 가벼운 안부. 침묵 OK.",
       }).catch((err) => logger.error("evening brief failed", { err: String(err) }));
     },
     { timezone: "Asia/Seoul" }
