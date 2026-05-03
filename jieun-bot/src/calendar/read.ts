@@ -42,7 +42,7 @@ export async function fetchEvents(range: FetchRange): Promise<CalendarEvent[]> {
     `to:${range.to}`,
   ];
 
-  const { stdout } = await execFileP("icalBuddy", args);
+  const { stdout } = await execFileP("icalBuddy", args, { timeout: 10_000 });
   return parseIcalBuddyOutput(stdout);
 }
 
