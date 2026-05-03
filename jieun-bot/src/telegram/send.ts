@@ -29,6 +29,18 @@ export function getChunkCap(trigger: Trigger, scheduleKind?: ScheduleKind): numb
   return 1;
 }
 
+// "오~" tic 차단. persona prompt 룰 ("매 메시지 오~로 시작 X — 봇 티 절대
+// 룰") + 다이어트 후에도 라이브에서 일관 leak. chunk cap과 동일한 패턴 —
+// Sonnet의 본능이 prompt instruction보다 강함을 인정하고 deterministic strip.
+//
+// 매치: 메시지의 정확한 첫 위치에 한국어 단어가 아닌 "오" + tilde/punctuation/공백.
+// 안전: "오늘"/"오빠"/"오케이"처럼 한글이 바로 뒤에 붙는 정상 단어는 매치 X.
+const LEADING_OH_RE = /^오[~!?,.…·\s]+/;
+
+export function stripLeadingOh(text: string): string {
+  return text.replace(LEADING_OH_RE, "");
+}
+
 // 사람이 카톡 칠 때 호흡 — 길이 비례. 길수록 "타이핑 시간" 늘어나는 느낌.
 const BASELINE_DELAY_MS = 600;
 const PER_CHAR_MS = 40;       // ~25 char/s = 적당한 모바일 타이핑 속도
@@ -53,7 +65,23 @@ export async function sendToOwner(
   trigger: Trigger,
   scheduleKind?: ScheduleKind
 ): Promise<void> {
-  const allChunks = text.split(SPLIT_RE).map((c) => c.trim()).filter(Boolean);
+  const rawChunks = text.split(SPLIT_RE).map((c) => c.trim()).filter(Boolean);
+  if (rawChunks.length === 0) return;
+
+  // 첫 chunk만 "오~" prefix strip 대상 (대화 첫 호흡). 이후 chunks는 그대로.
+  const allChunks = rawChunks.map((c, i) => {
+    if (i !== 0) return c;
+    const stripped = stripLeadingOh(c);
+    if (stripped !== c) {
+      logger.info("oh prefix stripped", {
+        trigger,
+        scheduleKind,
+        before: c.slice(0, 40),
+        after: stripped.slice(0, 40),
+      });
+    }
+    return stripped;
+  }).filter(Boolean);
   if (allChunks.length === 0) return;
 
   const cap = getChunkCap(trigger, scheduleKind);
