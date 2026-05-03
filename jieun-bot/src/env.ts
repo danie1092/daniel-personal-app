@@ -7,6 +7,7 @@ const Schema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   LOG_DIR: z.string().default("./logs"),
+  JIEUN_CALENDAR_INCLUDE: z.string().default(""),
 });
 
 export type Env = z.infer<typeof Schema>;
