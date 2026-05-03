@@ -11,12 +11,7 @@ export type PendingInput =
 const map = new Map<number, Pending>();
 
 export function setPending(chatId: number, input: PendingInput): void {
-  const proposedAt = Date.now();
-  if (input.kind === "register") {
-    map.set(chatId, { ...input, proposedAt });
-  } else {
-    map.set(chatId, { ...input, proposedAt });
-  }
+  map.set(chatId, { ...input, proposedAt: Date.now() });
 }
 
 export function getPending(chatId: number): Pending | null {
