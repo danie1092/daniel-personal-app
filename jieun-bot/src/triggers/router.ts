@@ -13,6 +13,7 @@ import { markFired } from "../db/botSignals.js";
 import { isMuted } from "../db/botMute.js";
 import { shouldBackoff } from "./backoff.js";
 import { getPending } from "../calendar/pending.js";
+import { findDeletionCandidates } from "../calendar/findTargets.js";
 
 const logger = new Logger(loadEnv().LOG_DIR, "bot");
 
@@ -72,7 +73,27 @@ export async function runTrigger(
     }
   }
 
-  const combinedContext = [pendingHint, ctx.contextSection ?? ""]
+  let candidatesHint = "";
+  if (ctx.trigger === "user") {
+    try {
+      const candidates = await findDeletionCandidates();
+      if (candidates.length > 0) {
+        const lines = candidates
+          .map((c, i) => `${i + 1}. uid=${c.targetUid} — ${c.display} (등록 ${c.writtenAt})`)
+          .join("\n");
+        candidatesHint = `[삭제 후보 — 봇이 등록한 일정]
+${lines}
+
+다영의 발화가 삭제 의도면 위 후보 중 *정확히 1개*에 매칭되는 경우 propose_calendar_delete.
+0개 매칭이면 "내가 등록한 게 아니라서 직접 지워줘" 응답.
+2+개 모호하면 자연어로 "(1) ... (2) ... 어떤 거?" — 그 턴엔 propose 금지.`;
+      }
+    } catch (err) {
+      logger.warn("findDeletionCandidates failed", { err: String(err) });
+    }
+  }
+
+  const combinedContext = [pendingHint, candidatesHint, ctx.contextSection ?? ""]
     .filter(Boolean)
     .join("\n\n");
 
