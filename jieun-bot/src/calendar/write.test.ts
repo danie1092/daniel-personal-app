@@ -4,29 +4,12 @@ vi.mock("node:child_process", () => ({
   execFile: vi.fn(),
 }));
 
-vi.mock("node:util", async () => {
-  const actual = await vi.importActual<typeof import("node:util")>("node:util");
-  return {
-    ...actual,
-    promisify: (fn: unknown) => {
-      return (cmd: string, args: string[]) => {
-        return new Promise((resolve, reject) => {
-          (fn as (...a: unknown[]) => void)(cmd, args, (err: Error | null, stdout: string) => {
-            if (err) reject(err);
-            else resolve({ stdout });
-          });
-        });
-      };
-    },
-  };
-});
-
 vi.mock("../env.js", () => ({
   loadEnv: () => ({ JIEUN_CALENDAR_INCLUDE: "다영의 개인", LOG_DIR: "/tmp" }),
 }));
 
 import { execFile } from "node:child_process";
-import { addEvent, deleteEvent } from "./write.js";
+import { addEvent, deleteEvent, __test } from "./write.js";
 
 const execFileMock = execFile as unknown as ReturnType<typeof vi.fn>;
 
@@ -36,7 +19,9 @@ beforeEach(() => {
 
 describe("calendar/write.ts addEvent", () => {
   it("decomposes ISO start to KST components for argv", async () => {
-    execFileMock.mockImplementation((_cmd, _args, cb) => cb(null, "ABC-UID-1234\n"));
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) =>
+      cb(null, { stdout: "ABC-UID-1234\n" })
+    );
 
     const uid = await addEvent({
       title: "ABC 회의",
@@ -57,7 +42,9 @@ describe("calendar/write.ts addEvent", () => {
   });
 
   it("trims osascript stdout newline", async () => {
-    execFileMock.mockImplementation((_cmd, _args, cb) => cb(null, "  UID-X\n  \n"));
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) =>
+      cb(null, { stdout: "  UID-X\n  \n" })
+    );
     const uid = await addEvent({
       title: "X",
       start: "2026-05-04T15:00:00+09:00",
@@ -67,8 +54,8 @@ describe("calendar/write.ts addEvent", () => {
   });
 
   it("rejects when osascript fails (TCC permission etc)", async () => {
-    execFileMock.mockImplementation((_cmd, _args, cb) => {
-      cb(new Error("Not authorized to send Apple events to Calendar."), "");
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
+      cb(new Error("Not authorized to send Apple events to Calendar."), { stdout: "" });
     });
     await expect(
       addEvent({
@@ -82,7 +69,9 @@ describe("calendar/write.ts addEvent", () => {
 
 describe("calendar/write.ts deleteEvent", () => {
   it("invokes delete script with calendar + uid", async () => {
-    execFileMock.mockImplementation((_cmd, _args, cb) => cb(null, "ok\n"));
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) =>
+      cb(null, { stdout: "ok\n" })
+    );
     await deleteEvent("UID-X");
     const args = execFileMock.mock.calls[0]?.[1] as string[];
     expect(args[args.length - 2]).toBe("다영의 개인");
@@ -90,9 +79,49 @@ describe("calendar/write.ts deleteEvent", () => {
   });
 
   it("propagates 'no event with uid' error", async () => {
-    execFileMock.mockImplementation((_cmd, _args, cb) => {
-      cb(new Error("no event with uid X"), "");
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
+      cb(new Error("no event with uid X"), { stdout: "" });
     });
     await expect(deleteEvent("X")).rejects.toThrow(/no event with uid/);
+  });
+});
+
+describe("calendar/write.ts decomposeKst", () => {
+  const { decomposeKst } = __test;
+
+  it("decomposes KST-offset ISO to date components", () => {
+    expect(decomposeKst("2026-05-04T15:00:00+09:00")).toEqual({
+      year: 2026,
+      month: 5,
+      day: 4,
+      hour: 15,
+      minute: 0,
+    });
+  });
+
+  it("converts UTC ISO to KST equivalent (+9h)", () => {
+    // 2026-05-04T06:00:00Z === 2026-05-04T15:00:00+09:00
+    expect(decomposeKst("2026-05-04T06:00:00Z")).toEqual({
+      year: 2026,
+      month: 5,
+      day: 4,
+      hour: 15,
+      minute: 0,
+    });
+  });
+
+  it("rolls year/month/day forward when KST crosses midnight", () => {
+    // 2026-05-04T15:00:00Z === 2026-05-05T00:00:00+09:00
+    expect(decomposeKst("2026-05-04T15:00:00Z")).toEqual({
+      year: 2026,
+      month: 5,
+      day: 5,
+      hour: 0,
+      minute: 0,
+    });
+  });
+
+  it("throws on invalid ISO", () => {
+    expect(() => decomposeKst("not-a-date")).toThrow(/invalid ISO/);
   });
 });

@@ -4,23 +4,6 @@ vi.mock("node:child_process", () => ({
   execFile: vi.fn(),
 }));
 
-vi.mock("node:util", async () => {
-  const actual = await vi.importActual<typeof import("node:util")>("node:util");
-  return {
-    ...actual,
-    promisify: (fn: unknown) => {
-      return (cmd: string, args: string[]) => {
-        return new Promise((resolve, reject) => {
-          (fn as (...a: unknown[]) => void)(cmd, args, (err: Error | null, stdout: string) => {
-            if (err) reject(err);
-            else resolve({ stdout });
-          });
-        });
-      };
-    },
-  };
-});
-
 vi.mock("../env.js", () => ({
   loadEnv: () => ({ JIEUN_CALENDAR_INCLUDE: "다영의 개인", LOG_DIR: "/tmp" }),
 }));
@@ -36,8 +19,8 @@ beforeEach(() => {
 
 describe("calendar/read.ts", () => {
   it("parses single event line", async () => {
-    execFileMock.mockImplementation((_cmd, _args, cb) => {
-      cb(null, "AAAA-1111\x1fABC 회의\x1f2026-05-04\x1f15:00\x1f16:00\n");
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
+      cb(null, { stdout: "AAAA-1111\x1fABC 회의\x1f2026-05-04\x1f15:00\x1f16:00\n" });
     });
 
     const events = await fetchEvents({ from: "2026-05-04", to: "2026-05-04" });
@@ -54,14 +37,16 @@ describe("calendar/read.ts", () => {
   });
 
   it("returns empty array on empty output", async () => {
-    execFileMock.mockImplementation((_cmd, _args, cb) => cb(null, ""));
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) =>
+      cb(null, { stdout: "" })
+    );
     const events = await fetchEvents({ from: "2026-05-04", to: "2026-05-04" });
     expect(events).toEqual([]);
   });
 
   it("ignores malformed lines without 5 fields", async () => {
-    execFileMock.mockImplementation((_cmd, _args, cb) => {
-      cb(null, "BAD-LINE\nAAAA\x1fOK\x1f2026-05-04\x1f10:00\x1f11:00\n");
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
+      cb(null, { stdout: "BAD-LINE\nAAAA\x1fOK\x1f2026-05-04\x1f10:00\x1f11:00\n" });
     });
     const events = await fetchEvents({ from: "2026-05-04", to: "2026-05-04" });
     expect(events).toHaveLength(1);
@@ -69,7 +54,9 @@ describe("calendar/read.ts", () => {
   });
 
   it("passes -ic <name> for personal calendar isolation", async () => {
-    execFileMock.mockImplementation((_cmd, _args, cb) => cb(null, ""));
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) =>
+      cb(null, { stdout: "" })
+    );
     await fetchEvents({ from: "2026-05-04", to: "2026-05-04" });
     const args = execFileMock.mock.calls[0]?.[1] as string[];
     expect(args).toContain("-ic");
@@ -90,10 +77,10 @@ describe("calendar/read.ts", () => {
   });
 
   it("propagates icalBuddy non-zero exit as error", async () => {
-    execFileMock.mockImplementation((_cmd, _args, cb) => {
+    execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
       const err = new Error("Command failed: icalBuddy") as Error & { code?: number };
       err.code = 1;
-      cb(err, "");
+      cb(err, { stdout: "" });
     });
     await expect(
       fetchEvents({ from: "2026-05-04", to: "2026-05-04" })

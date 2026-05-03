@@ -1,5 +1,6 @@
 on run argv
 	-- argv: title, calendarName, year, month, day, hour, minute, durationMinutes
+	-- assumes host TZ = KST; year/month/day/hour/minute are set explicitly so DST/locale ordering doesn't bite.
 	if (count of argv) is not 8 then
 		error "Usage: title calendar year month day hour minute durationMin"
 	end if
