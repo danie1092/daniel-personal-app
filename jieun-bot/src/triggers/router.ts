@@ -1,6 +1,6 @@
 import type { Trigger } from "../db/conversations.js";
 import type { ClaudeAdapter } from "../claude/adapter.js";
-import { buildSystemPrompt } from "../persona/prompt.js";
+import { buildSystemPrompt, buildContextPrefix } from "../persona/prompt.js";
 import { sendToOwner } from "../telegram/send.js";
 import type { ScheduleKind } from "../telegram/send.js";
 import { loadMemorySection, getProfileSection } from "../memory/load.js";
@@ -97,7 +97,13 @@ ${lines}
     .filter(Boolean)
     .join("\n\n");
 
+  // systemPrompt = stable per-trigger (Agent SDK 자동 caching에서 hit).
+  // contextPrefix = volatile (시간/메모리/컨텍스트) — user prompt에 prepend.
   const systemPrompt = buildSystemPrompt({
+    trigger: ctx.trigger,
+    scheduleKind: ctx.scheduleKind,
+  });
+  const contextPrefix = buildContextPrefix({
     trigger: ctx.trigger,
     scheduleKind: ctx.scheduleKind,
     now: new Date(),
@@ -105,9 +111,12 @@ ${lines}
     profileSection,
     contextSection: combinedContext,
   });
+  const userPrompt = contextPrefix
+    ? `${contextPrefix}\n\n---\n\n${ctx.userPrompt}`
+    : ctx.userPrompt;
 
   try {
-    const result = await claude.ask({ systemPrompt, userPrompt: ctx.userPrompt });
+    const result = await claude.ask({ systemPrompt, userPrompt });
     const { cleanText, actions, parseError } = parseActions(result.text);
     if (parseError) {
       logger.warn("actions parse error", { trigger: ctx.trigger, parseError });
@@ -133,6 +142,9 @@ ${lines}
       durationMs: result.durationMs,
       hadText: !!cleanText,
       actionCount: actions.length,
+      cacheReadTokens: result.cacheReadTokens,
+      cacheCreationTokens: result.cacheCreationTokens,
+      inputTokens: result.inputTokens,
     });
     return cleanText;
   } catch (err) {

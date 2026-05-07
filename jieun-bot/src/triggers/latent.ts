@@ -2,7 +2,7 @@ import type { ClaudeAdapter } from "../claude/adapter.js";
 import { computeSignals } from "../signals/compute.js";
 import { recordCandidate, markFired } from "../db/botSignals.js";
 import { loadMemorySection, getProfileSection } from "../memory/load.js";
-import { buildSystemPrompt } from "../persona/prompt.js";
+import { buildSystemPrompt, buildContextPrefix } from "../persona/prompt.js";
 import { sendToOwner } from "../telegram/send.js";
 import { isInSilenceWindow } from "./silenceWindow.js";
 import { latentSnapshot } from "../calendar/context.js";
@@ -106,7 +106,8 @@ export async function runLatentObservation(claude: ClaudeAdapter): Promise<void>
     .filter((s) => s && s.length > 0)
     .join("\n\n");
 
-  const systemPrompt = buildSystemPrompt({
+  const systemPrompt = buildSystemPrompt({ trigger: "latent" });
+  const contextPrefix = buildContextPrefix({
     trigger: "latent",
     now: new Date(),
     memorySection,
@@ -114,7 +115,9 @@ export async function runLatentObservation(claude: ClaudeAdapter): Promise<void>
     contextSection,
   });
 
-  const userPrompt = `${LATENT_SYSTEM_DIRECTIVE}\n\n위 컨텍스트로 JSON 출력:`;
+  const userPrompt = contextPrefix
+    ? `${contextPrefix}\n\n---\n\n${LATENT_SYSTEM_DIRECTIVE}\n\n위 컨텍스트로 JSON 출력:`
+    : `${LATENT_SYSTEM_DIRECTIVE}\n\n위 컨텍스트로 JSON 출력:`;
 
   let decision: LatentDecision | null = null;
   try {

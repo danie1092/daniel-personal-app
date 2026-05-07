@@ -188,8 +188,35 @@ const RETRO_SECTION = `
 시작 톤은 가볍게 ("테이블 앞이야?" 류).
 `.trim();
 
-export function buildSystemPrompt(input: PromptInput): string {
-  const { trigger, scheduleKind, now, memorySection, profileSection, contextSection } = input;
+/**
+ * Stable per-trigger. *Byte-identical* across calls of the same trigger →
+ * Agent SDK 자동 prompt caching이 cache hit. 일반 user 트리거 시간당 1.5건
+ * (5분 윈도우 내 평균 ~7건) 라이브 측정 — 캐시 적중률 ≈ N-1/N.
+ *
+ * 변동값(시간/메모리/컨텍스트)은 buildContextPrefix로 빠짐 → user prompt에 prepend.
+ * 변동값 한 글자라도 systemPrompt에 박히면 prefix 깨져서 매 호출 cache miss.
+ */
+export function buildSystemPrompt(input: { trigger: Trigger; scheduleKind?: ScheduleKind }): string {
+  const { trigger, scheduleKind } = input;
+  return [
+    CORE,
+    trigger === "user" ? CALENDAR_RULES : "",
+    `[트리거: ${trigger}]\n${TRIGGER_LABELS[trigger]}`,
+    trigger === "schedule" && scheduleKind === "retro" ? RETRO_SECTION : "",
+    `[지시]
+- 출력은 자연어 + 필요시 <actions> JSON 블록 (캘린더 룰 참조). 그 외 메타 정보(트리거 라벨, 길이 카운트, 판단 근거) 출력 X.
+- 캘린더 액션 조건 맞으면 <actions> 블록 *반드시* emit — 자연어 확인 발화만으론 등록 안 됨.
+- 침묵을 선택하면 빈 문자열 반환.
+- 단락 1개 default. \\n\\n 거의 X (시스템 cap이 코드로 강제).`,
+  ].filter(Boolean).join("\n\n");
+}
+
+/**
+ * 변동 컨텍스트 — 매 호출 다름. systemPrompt 캐시를 깨지 않으려고
+ * user prompt 앞에 prepend. (Claude Code의 <system-reminder> 패턴과 동일.)
+ */
+export function buildContextPrefix(input: PromptInput): string {
+  const { now, memorySection, profileSection, contextSection } = input;
   const fmt = new Intl.DateTimeFormat("ko-KR", {
     timeZone: "Asia/Seoul",
     dateStyle: "full",
@@ -214,18 +241,9 @@ export function buildSystemPrompt(input: PromptInput): string {
   ].join("\n");
 
   return [
-    CORE,
-    trigger === "user" ? CALENDAR_RULES : "",
     profileSection ? `[다영에 대해 알게 된 것]\n${profileSection}` : "",
     `[지금]\n${nowSection}`,
-    `[트리거: ${trigger}]\n${TRIGGER_LABELS[trigger]}`,
-    trigger === "schedule" && scheduleKind === "retro" ? RETRO_SECTION : "",
     memorySection ? `[메모리]\n${memorySection}` : "",
     contextSection ? `[현재 컨텍스트]\n${contextSection}` : "",
-    `[지시]
-- 출력은 자연어 + 필요시 <actions> JSON 블록 (캘린더 룰 참조). 그 외 메타 정보(트리거 라벨, 길이 카운트, 판단 근거) 출력 X.
-- 캘린더 액션 조건 맞으면 <actions> 블록 *반드시* emit — 자연어 확인 발화만으론 등록 안 됨.
-- 침묵을 선택하면 빈 문자열 반환.
-- 단락 1개 default. \\n\\n 거의 X (시스템 cap이 코드로 강제).`,
   ].filter(Boolean).join("\n\n");
 }
