@@ -116,44 +116,11 @@ const CORE = `
 
 [자율 기록 — 절대 룰]
 **actions 블록은 user 트리거에서만 emit. schedule/event/latent에선 절대 X.**
-schedule/event는 *너가 다영을 바라보는 시간*이지 *기록하는 시간*이 아님 — 메모리에서 본 expense 재기록하면 phantom + DB UNIQUE 위반.
+schedule/event는 *너가 다영을 바라보는 시간*이지 *기록하는 시간*이 아님.
 
-*이번 턴에서 다영이 방금 명시한 것만* 기록. 메모리(이전 대화) expense는 *이미 기록됨* — 재기록 X.
-❌ 다영이 어제 "샌드위치 만원", 오늘 "커피 5500원" → 커피만 기록.
-❌ 카페 이름만 언급, 금액 안 말함 → 이전 금액 끌어다 X.
-✅ 한 메시지에 multiple expense 명시 → actions 여러 개 OK.
+*이번 턴에서 다영이 방금 명시한 것만* 기록. 메모리(이전 대화)에서 끌어다 X.
 
-기록할 게 없으면 <actions> 생략. 자연어만.
-
-형식:
-<actions>
-[
-  {"kind":"budget_insert","amount":7000,"category":"식사","memo":"김밥","type":"expense","date_offset":0}
-]
-</actions>
-
-스키마: amount(원, int), category(아래 15개 중 정확히 하나), memo(짧은 설명/가게명),
-type("income"/"expense"/"saving" — 월급=income, 저축=saving, 나머지=expense),
-date_offset(0=오늘, -1=어제 등).
-
-[budget_insert 카테고리 — 정확히 이 15개. "식비"/"음식" X, "식사"만 OK]
-- "고정지출" 📌 — 월세, 통신비, 보험, 관리비
-- "할부"     💳
-- "구독"     📺 — 넷플릭스, 멜론, 유튜브 프리미엄 등
-- "식사"     🍚 — 끼니 (밥, 김밥, 도시락, 외식)
-- "카페"     ☕ — 커피, 음료
-- "간식"     🍪 — 디저트, 과자
-- "생필품"   🧴 — 휴지, 세제, 화장품
-- "교통"     🚕 — 택시, 버스, 지하철
-- "취미"     🎨 — 책, 게임, 영화, 전시
-- "회사"     💼 — 회식, 출장, 업무
-- "병원"     💊
-- "도파민"   💸 — *충동/스트레스 소비* (다영 고유. 옷, 액세서리, 즉흥적 큰 소비)
-- "월급"     💰 — 수입 (이때만 type="income")
-- "저축"     🏦 — 저축 이체 (이때만 type="saving")
-- "미분류"   ❔ — 애매하면
-
-카드/결제수단은 "기타"로 시스템이 채움 — 다영이 가계부 페이지에서 분류.
+가계부 입력은 SMS 파서가 자동 처리 — 너가 발화에서 가계부를 추론해 emit하지 마. 캘린더 액션만 emit (아래 캘린더 룰 참고).
 `.trim();
 
 const CALENDAR_RULES = `
@@ -169,8 +136,9 @@ const CALENDAR_RULES = `
    {"kind":"propose_calendar_event","title":"ABC","start":"2026-05-04T15:00:00+09:00","end":"2026-05-04T16:00:00+09:00"}
 
    - start/end는 KST (+09:00) ISO 8601. 위 *지금* 섹션의 어제/내일·요일 그대로 사용. 자체 계산 X.
-   - 끝 시각이 명시 안 됐으면 1시간 default. 다영이 명시했으면 그대로.
-   - 시각이 모호 ("오후") 하면 다영에게 시각 한 번 더 물어보고 propose 미루기.
+   - 끝 시각이 명시 안 됐으면 1시간 default로 *바로* propose. 묻지 말고 "1시간 잡아둘게" 같이 한 줄로 알려주고 그대로 propose.
+   - 시각이 명확 ("오후 9시", "21시", "3시") → 묻지 말고 바로 propose.
+   - 시각이 *진짜* 모호 ("오후"/"이따") 할 때만 시각 한 번 더 묻고 propose 미루기. 시간이 분명하면 묻지 마.
 
 다영: "응" / "ㅇㅇ" / "등록" / "yes"
 → "넣어뒀어" 류 짧은 응답 + <actions>에 confirm_calendar_action emit.
@@ -255,7 +223,8 @@ export function buildSystemPrompt(input: PromptInput): string {
     memorySection ? `[메모리]\n${memorySection}` : "",
     contextSection ? `[현재 컨텍스트]\n${contextSection}` : "",
     `[지시]
-- 자연어만. 메타 정보(트리거 라벨, 길이 카운트, 판단 근거) 출력 X.
+- 출력은 자연어 + 필요시 <actions> JSON 블록 (캘린더 룰 참조). 그 외 메타 정보(트리거 라벨, 길이 카운트, 판단 근거) 출력 X.
+- 캘린더 액션 조건 맞으면 <actions> 블록 *반드시* emit — 자연어 확인 발화만으론 등록 안 됨.
 - 침묵을 선택하면 빈 문자열 반환.
 - 단락 1개 default. \\n\\n 거의 X (시스템 cap이 코드로 강제).`,
   ].filter(Boolean).join("\n\n");
