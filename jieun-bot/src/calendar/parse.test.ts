@@ -3,11 +3,11 @@ import { validateProposeEvent } from "./parse.js";
 
 describe("calendar/parse.ts validateProposeEvent", () => {
   it("accepts valid ISO with KST offset", () => {
-    const r = validateProposeEvent({
-      title: "ABC",
-      start: "2026-05-04T15:00:00+09:00",
-      end: "2026-05-04T16:00:00+09:00",
-    });
+    // 하드코딩 날짜는 시간 흐르면서 1일 cutoff 넘어 fail. 내일 기준 동적 생성.
+    const tomorrow = new Date(Date.now() + 86400 * 1000);
+    const start = new Date(tomorrow.setHours(15, 0, 0, 0)).toISOString();
+    const end = new Date(tomorrow.setHours(16, 0, 0, 0)).toISOString();
+    const r = validateProposeEvent({ title: "ABC", start, end });
     expect(r.ok).toBe(true);
   });
 

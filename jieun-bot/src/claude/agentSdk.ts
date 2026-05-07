@@ -4,7 +4,10 @@ import type { ClaudeAdapter, ClaudeCallInput, ClaudeCallResult } from "./adapter
 export class AgentSdkClaude implements ClaudeAdapter {
   async ask(input: ClaudeCallInput): Promise<ClaudeCallResult> {
     const start = Date.now();
-    let text = "";
+    // 다중 turn (maxTurns=3) 케이스에서 turn마다 assistant text 누적하면 동일
+    // 응답이 두 번 발신되는 phantom duplicate 발생 (라이브 1회 재현). 누적 X,
+    // *마지막* turn의 텍스트만 keep — 도구 없으니 마지막 turn = 최종 답변.
+    let lastAssistantText = "";
 
     const q = query({
       prompt: input.userPrompt,
@@ -19,17 +22,19 @@ export class AgentSdkClaude implements ClaudeAdapter {
 
     for await (const msg of q) {
       if (msg.type === "assistant" && msg.message?.content) {
+        let turnText = "";
         for (const block of msg.message.content) {
           if (block.type === "text" && "text" in block) {
-            text += (block as { text: string }).text;
+            turnText += (block as { text: string }).text;
           }
         }
+        if (turnText) lastAssistantText = turnText;
       }
       if (msg.type === "result" && msg.subtype !== "success") {
         throw new Error(`claude error: ${msg.subtype} — ${JSON.stringify(msg).slice(0, 200)}`);
       }
     }
 
-    return { text: text.trim(), durationMs: Date.now() - start };
+    return { text: lastAssistantText.trim(), durationMs: Date.now() - start };
   }
 }
