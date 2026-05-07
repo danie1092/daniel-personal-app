@@ -1,14 +1,5 @@
 import { z } from "zod";
 
-const BudgetInsertSchema = z.object({
-  kind: z.literal("budget_insert"),
-  amount: z.number().int().positive(),
-  category: z.string().min(1),
-  memo: z.string().min(1),
-  type: z.enum(["income", "expense", "saving"]),
-  date_offset: z.number().int().min(-7).max(0).default(0),
-});
-
 const ProposeCalendarEventSchema = z.object({
   kind: z.literal("propose_calendar_event"),
   title: z.string().min(1),
@@ -31,7 +22,6 @@ const CancelCalendarActionSchema = z.object({
 });
 
 export const ActionSchema = z.discriminatedUnion("kind", [
-  BudgetInsertSchema,
   ProposeCalendarEventSchema,
   ProposeCalendarDeleteSchema,
   ConfirmCalendarActionSchema,
@@ -69,11 +59,11 @@ export function parseActions(claudeText: string): ParseResult {
       parseError = `JSON parse: ${String(err)}`;
       continue;
     }
-    if (!Array.isArray(parsed)) {
-      parseError = "actions must be an array";
-      continue;
-    }
-    for (const item of parsed) {
+    // Claude는 "단일 액션 한 번 emit"하는 케이스에서 array wrap을 자주 누락
+    // ({"kind":"..."} 형태). 룰을 array로 강제하면 1-액션 케이스에서 fragile —
+    // 둘 다 받기.
+    const items = Array.isArray(parsed) ? parsed : [parsed];
+    for (const item of items) {
       const r = ActionSchema.safeParse(item);
       if (r.success) actions.push(r.data);
     }
