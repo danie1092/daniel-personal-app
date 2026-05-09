@@ -23,10 +23,8 @@ export const NOTION_DB = {
     db: "396fdab9e2d746499340be8bb370635e",
     ds: "fc7ea116-1908-4a64-b794-b6f78832188a",
   },
-  // setupDailyConditionDb 실행 후 출력된 ID로 채울 것. 기본값(빈 문자열)이면
-  // syncDailyLog가 no-op으로 빠짐 — DB 미생성 상태에서 잡 죽지 않게.
   dailyCondition: {
-    db: "",
-    ds: "",
+    db: "d72e26499ced413683c744d42460c310",
+    ds: "7003008b-c351-42f4-af4e-7f3ff2597a4b",
   },
 } as const;
