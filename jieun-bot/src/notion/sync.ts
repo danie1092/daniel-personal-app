@@ -219,6 +219,7 @@ export async function syncDailyLog(sinceDays = 14): Promise<number> {
   for (const row of data ?? []) {
     const date = row.date as string;
     const properties: Record<string, any> = {
+      "날짜 표시": { title: T(date) },
       "날짜": { date: { start: date } },
     };
     const setNum = (key: string, v: unknown) => {
