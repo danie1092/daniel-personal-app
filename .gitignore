@@ -46,3 +46,10 @@ next-env.d.ts
 # environment variables
 .env.local
 .env*.local
+
+# jieun-bot
+jieun-bot/logs/
+jieun-bot/.env
+jieun-bot/.env.local
+jieun-bot/dist/
+jieun-bot/node_modules/

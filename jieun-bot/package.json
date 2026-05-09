@@ -1,0 +1,34 @@
+{
+  "name": "jieun-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node --enable-source-maps dist/index.js",
+    "build": "tsc -p tsconfig.json && cp -R src/calendar/scripts dist/calendar/",
+    "sync:budget": "tsx scripts/runSheetsSync.ts",
+    "setup:dashboard": "tsx scripts/runSetupDashboard.ts",
+    "setup:daily-condition": "tsx scripts/runSetupDailyConditionDb.ts",
+    "fix:dashboard-formulas": "tsx scripts/fixDashboardFormulas.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.0",
+    "@notionhq/client": "^5.20.0",
+    "@supabase/supabase-js": "^2.101.1",
+    "dotenv": "^16.6.1",
+    "googleapis": "^171.4.0",
+    "grammy": "^1.30.0",
+    "node-cron": "^3.0.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.19.0",
+    "typescript": "^5",
+    "vitest": "^2.1.9"
+  }
+}
