@@ -8,6 +8,9 @@ const Schema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   LOG_DIR: z.string().default("./logs"),
   JIEUN_CALENDAR_INCLUDE: z.string().default(""),
+  NOTION_TOKEN: z.string().min(1),
+  GOOGLE_APPLICATION_CREDENTIALS: z.string().min(1),
+  GOOGLE_SHEETS_BUDGET_ID: z.string().min(1),
 });
 
 export type Env = z.infer<typeof Schema>;

@@ -28,6 +28,19 @@ function evidenceToContext(candidates: SignalCandidate[]): string {
     } else if (c.kind === "memo_frequency_shift") {
       const e = c.evidence as { recent: number; prior: number; ratio: number; direction: string };
       lines.push(`- 메모 빈도 ${e.direction === "drop" ? "급감" : "급증"}: 최근 7일 ${e.recent}개 vs 이전 7일 ${e.prior}개 (${e.ratio}배)`);
+    } else if (c.kind === "survival_routine_miss") {
+      const e = c.evidence as { itemName: string; missDates: string[] };
+      // 생존 루틴 이탈은 행동 룰까지 같이 박음 — 분석 X, 같이 있기만.
+      lines.push(
+        `[주의] 생존 루틴 이탈 감지: "${e.itemName}" 2일 연속 미체크 (${e.missDates.join(", ")}).`,
+        `루틴 얘기 꺼내지 마. "요즘 좀 힘들어?" 조용히 한 마디만.`,
+        `분석 X. 해결책 X. 같이 있기만.`
+      );
+    } else if (c.kind === "routine_adjustment_needed") {
+      const e = c.evidence as { case: string; proposeChange: string; reasonText: string; itemName?: string };
+      lines.push(
+        `- 루틴 조정 필요: ${e.reasonText} → ${e.proposeChange === "add" ? "추가" : "줄이기"} 후보${e.itemName ? ` (${e.itemName})` : ""}`
+      );
     }
   }
   return lines.join("\n");

@@ -11,11 +11,13 @@ vi.mock("../env.js", () => ({
   }),
 }));
 
-// db mock — chainable .from().insert().select().single() 체인 + .from().select().eq()...
-// budget_insert 경로와 confirm_calendar_action(delete) 경로 모두 커버.
-const insertSingleMock = vi.fn();
+// db mock — chainable .from().select().eq()... 체인.
+// confirm_calendar_action(delete) 경로 커버.
 const deleteSelectChain = vi.fn();
 const dbFromMock = vi.fn();
+const upsertMock = vi.fn();
+const insertMock = vi.fn();
+const updateChainEqMock = vi.fn();
 
 vi.mock("../db/client.js", () => ({
   db: () => ({
@@ -49,29 +51,31 @@ vi.mock("../telegram/send.js", () => ({
 
 import { executeActions } from "./executeActions.js";
 import { setPending, getPending, __test as pendingTest } from "../calendar/pending.js";
+import {
+  setRoutinePending,
+  getRoutinePending,
+  __test as routinePendingTest,
+} from "../routine/pending.js";
 
 beforeEach(() => {
-  insertSingleMock.mockReset();
   deleteSelectChain.mockReset();
   dbFromMock.mockReset();
+  upsertMock.mockReset();
+  insertMock.mockReset();
+  updateChainEqMock.mockReset();
   recordBotWriteMock.mockClear();
   markBotWriteEditedMock.mockClear();
   addEventMock.mockClear();
   deleteEventMock.mockClear();
   sendToOwnerMock.mockClear();
   pendingTest.clearAll();
+  routinePendingTest.clearAll();
 
-  // default budget_insert chain
+  upsertMock.mockResolvedValue({ error: null });
+  insertMock.mockResolvedValue({ error: null });
+  updateChainEqMock.mockResolvedValue({ error: null });
+
   dbFromMock.mockImplementation((table: string) => {
-    if (table === "budget_entries") {
-      return {
-        insert: () => ({
-          select: () => ({
-            single: insertSingleMock,
-          }),
-        }),
-      };
-    }
     if (table === "bot_writes") {
       return {
         select: () => ({
@@ -85,53 +89,16 @@ beforeEach(() => {
         }),
       };
     }
+    if (table === "routine_checks" || table === "daily_log") {
+      return { upsert: upsertMock };
+    }
+    if (table === "routine_items") {
+      return {
+        insert: insertMock,
+        update: () => ({ eq: updateChainEqMock }),
+      };
+    }
     throw new Error(`unexpected table ${table}`);
-  });
-});
-
-describe("executeActions — budget_insert", () => {
-  it("inserts row + records bot_write", async () => {
-    insertSingleMock.mockResolvedValue({ data: { id: "BE-1" }, error: null });
-
-    await executeActions(
-      [{
-        kind: "budget_insert",
-        amount: 7000,
-        category: "식사",
-        memo: "김밥",
-        type: "expense",
-        date_offset: 0,
-      }],
-      999
-    );
-
-    expect(insertSingleMock).toHaveBeenCalledTimes(1);
-    expect(recordBotWriteMock).toHaveBeenCalledTimes(1);
-    expect(recordBotWriteMock).toHaveBeenCalledWith({
-      targetTable: "budget_entries",
-      targetId: "BE-1",
-      notes: expect.stringContaining("김밥"),
-    });
-  });
-
-  it("swallows DB error, does not throw", async () => {
-    insertSingleMock.mockResolvedValue({ data: null, error: { message: "boom", code: "23505" } });
-
-    await expect(
-      executeActions(
-        [{
-          kind: "budget_insert",
-          amount: 7000,
-          category: "식사",
-          memo: "김밥",
-          type: "expense",
-          date_offset: 0,
-        }],
-        999
-      )
-    ).resolves.toBeUndefined();
-
-    expect(recordBotWriteMock).not.toHaveBeenCalled();
   });
 });
 
@@ -235,6 +202,115 @@ describe("calendar action dispatch", () => {
     });
     await executeActions([{ kind: "cancel_calendar_action" }], 999);
     expect(getPending(999)).toBeNull();
+  });
+
+  it("record_routine_check upserts to routine_checks", async () => {
+    await executeActions(
+      [{ kind: "record_routine_check", item_id: "ITEM-1", checked: true, date: "2026-05-08" }],
+      999
+    );
+    expect(upsertMock).toHaveBeenCalledTimes(1);
+    expect(upsertMock).toHaveBeenCalledWith(
+      { item_id: "ITEM-1", date: "2026-05-08", checked: true },
+      { onConflict: "item_id,date" }
+    );
+  });
+
+  it("record_condition upserts only provided fields", async () => {
+    await executeActions(
+      [{
+        kind: "record_condition",
+        date: "2026-05-08",
+        sleep_score: 2,
+        sleep_text: "분명 잘잤는데 개운하지 않아",
+      }],
+      999
+    );
+    expect(upsertMock).toHaveBeenCalledTimes(1);
+    const call = upsertMock.mock.calls[0]!;
+    const patch = call[0] as Record<string, unknown>;
+    const opts = call[1];
+    expect(patch).toMatchObject({
+      date: "2026-05-08",
+      sleep_score: 2,
+      sleep_text: "분명 잘잤는데 개운하지 않아",
+    });
+    expect(patch.mood_score).toBeUndefined();
+    expect(opts).toEqual({ onConflict: "date" });
+  });
+
+  it("record_meal upserts to daily_log", async () => {
+    await executeActions(
+      [{ kind: "record_meal", date: "2026-05-08", lunch: "김밥" }],
+      999
+    );
+    expect(upsertMock).toHaveBeenCalledTimes(1);
+    const call = upsertMock.mock.calls[0]!;
+    expect(call[0]).toMatchObject({
+      date: "2026-05-08",
+      lunch: "김밥",
+    });
+  });
+
+  it("propose_routine_change sets routine pending", async () => {
+    await executeActions(
+      [{
+        kind: "propose_routine_change",
+        change: "remove",
+        name: "옥상 5분",
+        time_slot: "afternoon",
+        reason: "에너지 2점↓ 3일 연속",
+      }],
+      999
+    );
+    const p = getRoutinePending(999);
+    expect(p?.change).toBe("remove");
+    expect(p?.name).toBe("옥상 5분");
+  });
+
+  it("confirm_routine_change(add) inserts new routine_items row", async () => {
+    setRoutinePending(999, {
+      change: "add",
+      name: "스트레칭 10분",
+      time_slot: "evening",
+      reason: "에너지 4점 4주 연속",
+    });
+    await executeActions([{ kind: "confirm_routine_change" }], 999);
+    expect(insertMock).toHaveBeenCalledWith({
+      name: "스트레칭 10분",
+      time_slot: "evening",
+      is_active: true,
+    });
+    expect(getRoutinePending(999)).toBeNull();
+  });
+
+  it("confirm_routine_change(remove) deactivates by name", async () => {
+    setRoutinePending(999, {
+      change: "remove",
+      name: "옥상 5분",
+      time_slot: "afternoon",
+      reason: "..",
+    });
+    await executeActions([{ kind: "confirm_routine_change" }], 999);
+    expect(updateChainEqMock).toHaveBeenCalledTimes(1);
+    expect(getRoutinePending(999)).toBeNull();
+  });
+
+  it("confirm_routine_change without pending is no-op", async () => {
+    await executeActions([{ kind: "confirm_routine_change" }], 999);
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(updateChainEqMock).not.toHaveBeenCalled();
+  });
+
+  it("cancel_routine_change clears pending", async () => {
+    setRoutinePending(999, {
+      change: "add",
+      name: "X",
+      time_slot: "morning",
+      reason: "test",
+    });
+    await executeActions([{ kind: "cancel_routine_change" }], 999);
+    expect(getRoutinePending(999)).toBeNull();
   });
 
   it("confirm failure (osascript error) sends system message to owner", async () => {

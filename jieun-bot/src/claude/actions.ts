@@ -21,11 +21,59 @@ const CancelCalendarActionSchema = z.object({
   kind: z.literal("cancel_calendar_action"),
 });
 
+const RecordRoutineCheckSchema = z.object({
+  kind: z.literal("record_routine_check"),
+  item_id: z.string().min(1),
+  checked: z.boolean(),
+  date: z.string().min(1),
+});
+
+const RecordConditionSchema = z.object({
+  kind: z.literal("record_condition"),
+  date: z.string().min(1),
+  sleep_score: z.number().int().min(1).max(5).optional(),
+  sleep_text: z.string().optional(),
+  mood_score: z.number().int().min(1).max(5).optional(),
+  mood_text: z.string().optional(),
+  energy_score: z.number().int().min(1).max(5).optional(),
+  energy_text: z.string().optional(),
+});
+
+const RecordMealSchema = z.object({
+  kind: z.literal("record_meal"),
+  date: z.string().min(1),
+  breakfast: z.string().optional(),
+  lunch: z.string().optional(),
+  dinner: z.string().optional(),
+});
+
+const ProposeRoutineChangeSchema = z.object({
+  kind: z.literal("propose_routine_change"),
+  change: z.enum(["add", "remove"]),
+  name: z.string().min(1),
+  time_slot: z.string().min(1),
+  reason: z.string().min(1),
+});
+
+const ConfirmRoutineChangeSchema = z.object({
+  kind: z.literal("confirm_routine_change"),
+});
+
+const CancelRoutineChangeSchema = z.object({
+  kind: z.literal("cancel_routine_change"),
+});
+
 export const ActionSchema = z.discriminatedUnion("kind", [
   ProposeCalendarEventSchema,
   ProposeCalendarDeleteSchema,
   ConfirmCalendarActionSchema,
   CancelCalendarActionSchema,
+  RecordRoutineCheckSchema,
+  RecordConditionSchema,
+  RecordMealSchema,
+  ProposeRoutineChangeSchema,
+  ConfirmRoutineChangeSchema,
+  CancelRoutineChangeSchema,
 ]);
 export type Action = z.infer<typeof ActionSchema>;
 

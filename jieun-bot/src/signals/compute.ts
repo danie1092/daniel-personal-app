@@ -4,6 +4,8 @@ import { computeBudgetPace } from "./budgetPace.js";
 import { computeRoutineStreak } from "./routineStreak.js";
 import { computeAvoidanceRecovery } from "./avoidanceRecovery.js";
 import { computeMemoFrequency } from "./memoFrequency.js";
+import { computeSurvivalRoutineMiss } from "./survivalRoutineMiss.js";
+import { computeRoutineAdjustmentNeeded } from "./routineAdjustmentNeeded.js";
 import { lastFiredAt } from "../db/botSignals.js";
 import type { SignalCandidate } from "./types.js";
 
@@ -11,23 +13,29 @@ const MONTHLY_BUDGET = 2_000_000;
 const DEDUP_HOURS = 24;
 
 /**
- * Fetch 60-day data + run all 5 signals + apply 24h dedup.
+ * Fetch 60-day data + run all signals + apply 24h dedup.
  * Returns candidates that should fire (not yet fired in last 24h).
  */
 export async function computeSignals(now: Date = new Date()): Promise<SignalCandidate[]> {
   const sixtyAgo = new Date(now.getTime() - 60 * 86400 * 1000).toISOString().slice(0, 10);
 
-  const [budgetRes, itemsRes, checksRes, memoRes] = await Promise.all([
+  const [budgetRes, itemsRes, checksRes, memoRes, dailyLogRes] = await Promise.all([
     db().from("budget_entries").select("date, category, amount, type").gte("date", sixtyAgo),
-    db().from("routine_items").select("id, name, emoji"),
+    db().from("routine_items").select("id, name, emoji, time_slot, is_active"),
     db().from("routine_checks").select("item_id, date, checked").gte("date", sixtyAgo),
     db().from("memo_entries").select("created_at").gte("created_at", sixtyAgo),
+    db().from("daily_log").select("date, sleep_score, mood_score, energy_score").gte("date", sixtyAgo),
   ]);
 
   const budgetRows = (budgetRes.data ?? []) as { date: string; category: string; amount: number; type: string }[];
-  const items = (itemsRes.data ?? []) as { id: string; name: string; emoji: string }[];
+  const items = (itemsRes.data ?? []) as {
+    id: string; name: string; emoji: string; time_slot: string | null; is_active: boolean;
+  }[];
   const checks = (checksRes.data ?? []) as { item_id: string; date: string; checked: boolean }[];
   const memos = (memoRes.data ?? []) as { created_at: string }[];
+  const dailyLogs = (dailyLogRes.data ?? []) as {
+    date: string; sleep_score: number | null; mood_score: number | null; energy_score: number | null;
+  }[];
 
   const allCandidates: (SignalCandidate | null)[] = [
     computeCategoryOutlier(budgetRows, now),
@@ -35,6 +43,8 @@ export async function computeSignals(now: Date = new Date()): Promise<SignalCand
     computeRoutineStreak(items, checks, now),
     computeAvoidanceRecovery(checks, now),
     computeMemoFrequency(memos, now),
+    computeSurvivalRoutineMiss(items, checks, now),
+    computeRoutineAdjustmentNeeded(items, checks, dailyLogs, now),
   ];
 
   // 24h dedup

@@ -8,46 +8,87 @@ import { Logger } from "../logger.js";
 import { loadEnv } from "../env.js";
 import { ownerChatId } from "../telegram/bot.js";
 import { briefingForToday, briefingForTomorrow } from "../calendar/context.js";
+import { runNotionSync } from "../jobs/notionSync.js";
+import { runSheetsSync } from "../jobs/sheetsSync.js";
+import { buildRoutineContext, buildDailyLogContext } from "../routine/context.js";
 
 const logger = new Logger(loadEnv().LOG_DIR, "bot");
 
+function ymdKstToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+async function safeRoutine(slot: "morning" | "afternoon" | "evening", date: string): Promise<string> {
+  try {
+    return await buildRoutineContext(slot, date);
+  } catch (err) {
+    logger.warn("routine context failed", { slot, err: String(err) });
+    return "";
+  }
+}
+
+async function safeDailyLog(date: string): Promise<string> {
+  try {
+    return await buildDailyLogContext(date);
+  } catch (err) {
+    logger.warn("daily log context failed", { err: String(err) });
+    return "";
+  }
+}
+
 export function attachSchedule(claude: ClaudeAdapter): void {
-  // 점심 12:30 KST — 끼니 챙김 가벼운 노크
+  // 점심 12:30 KST — 낮 루틴 + 끼니 현황 + 가벼운 노크
   cron.schedule(
     "30 12 * * *",
-    () => {
+    async () => {
+      const date = ymdKstToday();
+      const [routine, daily] = await Promise.all([
+        safeRoutine("afternoon", date),
+        safeDailyLog(date),
+      ]);
+      const contextSection = [routine, daily].filter(Boolean).join("\n\n");
       runTrigger(claude, {
         trigger: "schedule",
         scheduleKind: "lunch",
         chatId: ownerChatId(),
+        contextSection,
         userPrompt:
           "지금은 점심 12:30. 다영이 끼니를 잘 못 챙긴다는 점을 알고 있지. " +
-          "점심 챙겼는지 가볍게 물어보고 싶으면 한마디. " +
-          "답이 없을 수도 있다는 점 알고 있으니 부담 없이. 침묵해도 OK.",
+          "[현재 컨텍스트]에 낮 루틴/끼니 현황이 있으면 그걸 보고 *맥락 있는 한마디*. " +
+          "끼니 미입력이면 자연스럽게 한 번 물어. 답이 없을 수도 있어, 부담 없이. 침묵 OK.",
       }).catch((err) => logger.error("lunch knock failed", { err: String(err) }));
     },
     { timezone: "Asia/Seoul" }
   );
 
-  // 아침 08:00 KST — 오늘 캘린더 + 가벼운 인사
+  // 아침 08:00 KST — 오늘 캘린더 + 아침 루틴 현황 + 가벼운 인사
   cron.schedule(
     "0 8 * * *",
     async () => {
+      const date = ymdKstToday();
       let calendarSection = "";
       try {
         calendarSection = await briefingForToday(new Date());
       } catch (err) {
         logger.warn("calendar briefing failed (morning)", { err: String(err) });
       }
+      const routine = await safeRoutine("morning", date);
+      const contextSection = [calendarSection, routine].filter(Boolean).join("\n\n");
       runTrigger(claude, {
         trigger: "schedule",
         scheduleKind: "morning",
         chatId: ownerChatId(),
-        contextSection: calendarSection,
+        contextSection,
         userPrompt:
           "지금은 아침 08:00. 다영의 하루 시작 전. " +
-          "[현재 컨텍스트]에 오늘 캘린더가 박혀 있으면 *맥락 있는 한마디*로 풀어 (예: '오후 3시 ABC 있네 — 점심 미리 챙겨'). " +
-          "일정 없으면 가벼운 인사 또는 어제 환기. 짧게. 침묵 OK.",
+          "[현재 컨텍스트]에 캘린더가 있으면 *맥락 있는 한마디*. " +
+          "아침 루틴 목록도 박혀 있어 — *가장 위 미체크 1개만* 골라 자연스럽게 유도 (예: '물 한 잔 했어?'). 절대 목록 나열 X, 1개만. " +
+          "일정·루틴 다 비면 가벼운 인사. 짧게. 침묵 OK.",
       }).catch((err) => logger.error("morning brief failed", { err: String(err) }));
     },
     { timezone: "Asia/Seoul" }
@@ -93,19 +134,26 @@ export function attachSchedule(claude: ClaudeAdapter): void {
     { timezone: "Asia/Seoul" }
   );
 
-  // 회고 23:00 KST — 테이블 앞 인사 (회고 본격 모드는 Block 4)
+  // 회고 23:00 KST — 저녁 루틴 + 컨디션 현황 박고 가볍게 노크
   cron.schedule(
     "0 23 * * *",
-    () => {
+    async () => {
+      const date = ymdKstToday();
+      const [routine, daily] = await Promise.all([
+        safeRoutine("evening", date),
+        safeDailyLog(date),
+      ]);
+      const contextSection = [routine, daily].filter(Boolean).join("\n\n");
       runTrigger(claude, {
         trigger: "schedule",
         scheduleKind: "retro",
         chatId: ownerChatId(),
+        contextSection,
         userPrompt:
           "지금은 23:00. 다영이 집에 와서 테이블 앞에 앉을 시간. " +
-          "가볍게 '테이블 앞이야?' 같은 노크. " +
-          "다영이 응하면 본격 회고 (Block 4에서 회고 모드 본격 도입 — 지금은 시작 인사만). " +
-          "침묵 OK.",
+          "[현재 컨텍스트]에 저녁 루틴/오늘 컨디션 현황이 있어. " +
+          "가볍게 '테이블 앞이야?' 류 노크 + 컨디션 미입력 분명하면 한 가지만 자연스럽게 (예: '오늘 잠은 어땠어?'). " +
+          "다영이 응하면 회고. 침묵 OK.",
       }).catch((err) => logger.error("evening retro failed", { err: String(err) }));
     },
     { timezone: "Asia/Seoul" }
@@ -157,10 +205,33 @@ export function attachSchedule(claude: ClaudeAdapter): void {
     { timezone: "Asia/Seoul" }
   );
 
+  // 노션 sync — 30분마다 (DB → 노션 push, routine_items는 노션 → DB)
+  cron.schedule(
+    "*/30 * * * *",
+    () => {
+      runNotionSync().catch((err) =>
+        logger.error("notionSync schedule failed", { err: String(err) })
+      );
+    },
+    { timezone: "Asia/Seoul" }
+  );
+
+  // Google Sheets sync — 30분마다, 노션과 15분 stagger (budget_entries → 다니의 가계부)
+  cron.schedule(
+    "15,45 * * * *",
+    () => {
+      runSheetsSync().catch((err) =>
+        logger.error("sheetsSync schedule failed", { err: String(err) })
+      );
+    },
+    { timezone: "Asia/Seoul" }
+  );
+
   logger.info("schedule attached", {
     tasks: [
       "morning:08", "lunch:12:30", "evening_brief:20:30", "end_of_day:21",
       "retro:23", "dailySummary:23:30", "latent:10/15/19:30", "weeklySummary:Sun23:59",
+      "notionSync:*/30", "sheetsSync:15,45",
     ],
   });
 }

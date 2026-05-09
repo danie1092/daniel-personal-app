@@ -172,6 +172,33 @@ const CALENDAR_RULES = `
 - propose 후 *자율* confirm 호출 X — 다영의 명시 응답 후에만 confirm.
 `.trim();
 
+const ROUTINE_RECORDING_RULES = `
+[루틴/컨디션 기록 — user 트리거, *방금 말한 것만*]
+
+루틴 완료/미완료 언급 → record_routine_check.
+  - item_id는 [현재 컨텍스트]의 루틴 목록에 박힌 [id=...] 그대로 사용.
+  - 컨텍스트 없으면 추측 X — emit 안 하고 자연어 응답만.
+  {"kind":"record_routine_check","item_id":"<id>","checked":true,"date":"YYYY-MM-DD"}
+
+"2점이야. [설명]" / "잠 4점, 좀 잤어" 류 → score(1~5) + text 분리해서 record_condition.
+  - 점수만/텍스트만 있어도 OK. 모든 필드 optional.
+  {"kind":"record_condition","date":"YYYY-MM-DD","sleep_score":2,"sleep_text":"분명 잘잤는데 개운하지 않아"}
+
+끼니 언급 ("점심 김밥", "저녁 안 먹어") → record_meal (해당 필드만).
+  {"kind":"record_meal","date":"YYYY-MM-DD","lunch":"김밥"}
+
+같은 날짜 중복 emit → 시스템이 UPSERT로 처리. 그냥 최신 정보 박으면 됨.
+
+[루틴 추가/제거 제안 — latent/weekly에서만]
+*propose_routine_change는 user 트리거에서 emit 금지* — schedule/latent에서만.
+[현재 컨텍스트]에 [routine_adjustment_needed] 시그널 박혀 있을 때 reason 그대로 사용.
+다영의 명시 응답 받으면 confirm_routine_change/cancel_routine_change.
+
+[추측 금지]
+이번 턴에서 다영이 *방금 명시한 것만* 기록. 메모리(이전 대화)에서 추론 X.
+"잘 잤대" 같은 3자 인용도 emit X — 다영의 직접 발화만.
+`.trim();
+
 const TRIGGER_LABELS: Record<Trigger, string> = {
   schedule: "정해진 시각 (브리핑/노크/회고)",
   event: "데이터 변경 이벤트 (가계부 INSERT, 메모 추가 등)",
@@ -201,6 +228,7 @@ export function buildSystemPrompt(input: { trigger: Trigger; scheduleKind?: Sche
   return [
     CORE,
     trigger === "user" ? CALENDAR_RULES : "",
+    trigger === "user" ? ROUTINE_RECORDING_RULES : "",
     `[트리거: ${trigger}]\n${TRIGGER_LABELS[trigger]}`,
     trigger === "schedule" && scheduleKind === "retro" ? RETRO_SECTION : "",
     `[지시]

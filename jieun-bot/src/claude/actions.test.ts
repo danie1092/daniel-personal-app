@@ -89,3 +89,66 @@ describe("calendar action parsing", () => {
     expect(r.parseError).toBeUndefined();
   });
 });
+
+describe("routine + condition action parsing", () => {
+  it("parses record_routine_check", () => {
+    const text = `<actions>[{"kind":"record_routine_check","item_id":"ITEM-1","checked":true,"date":"2026-05-08"}]</actions>`;
+    const r = parseActions(text);
+    expect(r.actions).toHaveLength(1);
+    if (r.actions[0]?.kind === "record_routine_check") {
+      expect(r.actions[0].item_id).toBe("ITEM-1");
+      expect(r.actions[0].checked).toBe(true);
+    }
+  });
+
+  it("parses record_condition with partial fields", () => {
+    const text = `<actions>[{"kind":"record_condition","date":"2026-05-08","sleep_score":2,"sleep_text":"분명 잘잤는데 개운하지 않아"}]</actions>`;
+    const r = parseActions(text);
+    expect(r.actions).toHaveLength(1);
+    if (r.actions[0]?.kind === "record_condition") {
+      expect(r.actions[0].sleep_score).toBe(2);
+      expect(r.actions[0].mood_score).toBeUndefined();
+    }
+  });
+
+  it("rejects record_condition with score out of range", () => {
+    const text = `<actions>[{"kind":"record_condition","date":"2026-05-08","sleep_score":7}]</actions>`;
+    const r = parseActions(text);
+    expect(r.actions).toHaveLength(0);
+  });
+
+  it("parses record_meal", () => {
+    const text = `<actions>[{"kind":"record_meal","date":"2026-05-08","lunch":"김밥"}]</actions>`;
+    const r = parseActions(text);
+    expect(r.actions).toHaveLength(1);
+    if (r.actions[0]?.kind === "record_meal") {
+      expect(r.actions[0].lunch).toBe("김밥");
+    }
+  });
+
+  it("parses propose_routine_change with reason", () => {
+    const text = `<actions>[{"kind":"propose_routine_change","change":"remove","name":"옥상 5분","time_slot":"afternoon","reason":"에너지 2점↓ 3일 연속"}]</actions>`;
+    const r = parseActions(text);
+    expect(r.actions).toHaveLength(1);
+    if (r.actions[0]?.kind === "propose_routine_change") {
+      expect(r.actions[0].change).toBe("remove");
+      expect(r.actions[0].reason).toContain("연속");
+    }
+  });
+
+  it("parses confirm_routine_change", () => {
+    const text = `<actions>[{"kind":"confirm_routine_change"}]</actions>`;
+    const r = parseActions(text);
+    expect(r.actions).toHaveLength(1);
+    expect(r.actions[0]?.kind).toBe("confirm_routine_change");
+  });
+
+  it("parses multiple record_routine_check in one block", () => {
+    const text = `<actions>[
+      {"kind":"record_routine_check","item_id":"A","checked":true,"date":"2026-05-08"},
+      {"kind":"record_routine_check","item_id":"B","checked":false,"date":"2026-05-08"}
+    ]</actions>`;
+    const r = parseActions(text);
+    expect(r.actions).toHaveLength(2);
+  });
+});

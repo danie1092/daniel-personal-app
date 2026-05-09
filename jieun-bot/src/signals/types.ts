@@ -3,7 +3,9 @@ export type SignalKind =
   | "budget_pace"
   | "routine_streak_break"
   | "avoidance_recovery"
-  | "memo_frequency_shift";
+  | "memo_frequency_shift"
+  | "survival_routine_miss"
+  | "routine_adjustment_needed";
 
 export type SignalCandidate = {
   kind: SignalKind;

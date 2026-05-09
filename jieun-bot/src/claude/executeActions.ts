@@ -11,24 +11,13 @@ import {
 import { validateProposeEvent } from "../calendar/parse.js";
 import { addEvent, deleteEvent } from "../calendar/write.js";
 import { sendToOwner } from "../telegram/send.js";
+import {
+  setRoutinePending,
+  getRoutinePending,
+  clearRoutinePending,
+} from "../routine/pending.js";
 
 const logger = new Logger(loadEnv().LOG_DIR, "bot");
-
-function dateForOffset(offset: number): string {
-  // KST 기준 오늘 + offset일. host TZ 무관.
-  const now = new Date();
-  const offsetMs = offset * 86400 * 1000;
-  const target = new Date(now.getTime() + offsetMs);
-
-  // en-CA + Asia/Seoul yields YYYY-MM-DD format directly
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return fmt.format(target);
-}
 
 /**
  * Run the actions emitted by Claude. One failure does not abort others.
@@ -40,28 +29,7 @@ function dateForOffset(offset: number): string {
 export async function executeActions(actions: Action[], chatId: number): Promise<void> {
   for (const a of actions) {
     try {
-      if (a.kind === "budget_insert") {
-        const date = dateForOffset(a.date_offset);
-        const { data, error } = await db()
-          .from("budget_entries")
-          .insert({
-            date,
-            category: a.category,
-            memo: a.memo,
-            amount: a.amount,
-            type: a.type,
-            payment_method: "기타",  // 자연어 발화엔 결제수단 정보 없음 — NOT NULL 충족용 기본값
-          })
-          .select("id")
-          .single();
-        if (error) throw error;
-        await recordBotWrite({
-          targetTable: "budget_entries",
-          targetId: data.id,
-          notes: `${a.memo} ${a.amount.toLocaleString()}원 (${a.category}, ${a.type}, ${date})`,
-        });
-        logger.info("action: budget_insert", { id: data.id, amount: a.amount, category: a.category });
-      } else if (a.kind === "propose_calendar_event") {
+      if (a.kind === "propose_calendar_event") {
         const v = validateProposeEvent({ title: a.title, start: a.start, end: a.end });
         if (!v.ok) {
           // Claude 환각/잘못된 ISO — graceful: pending 안 박고 다음 액션으로
@@ -105,6 +73,76 @@ export async function executeActions(actions: Action[], chatId: number): Promise
       } else if (a.kind === "cancel_calendar_action") {
         clearPending(chatId);
         logger.info("calendar pending: cancelled");
+      } else if (a.kind === "record_routine_check") {
+        // 같은 (item_id, date) 중복 emit → upsert로 처리.
+        const { error } = await db()
+          .from("routine_checks")
+          .upsert(
+            { item_id: a.item_id, date: a.date, checked: a.checked },
+            { onConflict: "item_id,date" }
+          );
+        if (error) throw error;
+        logger.info("routine check recorded", { item_id: a.item_id, date: a.date, checked: a.checked });
+      } else if (a.kind === "record_condition") {
+        // 부분 필드만 emit돼도 OK — 같은 date에 누적 update.
+        const patch: Record<string, unknown> = { date: a.date };
+        if (a.sleep_score !== undefined) patch.sleep_score = a.sleep_score;
+        if (a.sleep_text !== undefined) patch.sleep_text = a.sleep_text;
+        if (a.mood_score !== undefined) patch.mood_score = a.mood_score;
+        if (a.mood_text !== undefined) patch.mood_text = a.mood_text;
+        if (a.energy_score !== undefined) patch.energy_score = a.energy_score;
+        if (a.energy_text !== undefined) patch.energy_text = a.energy_text;
+        patch.updated_at = new Date().toISOString();
+        const { error } = await db()
+          .from("daily_log")
+          .upsert(patch, { onConflict: "date" });
+        if (error) throw error;
+        logger.info("condition recorded", { date: a.date, fields: Object.keys(patch).filter((k) => k !== "date" && k !== "updated_at") });
+      } else if (a.kind === "record_meal") {
+        const patch: Record<string, unknown> = { date: a.date };
+        if (a.breakfast !== undefined) patch.breakfast = a.breakfast;
+        if (a.lunch !== undefined) patch.lunch = a.lunch;
+        if (a.dinner !== undefined) patch.dinner = a.dinner;
+        patch.updated_at = new Date().toISOString();
+        const { error } = await db()
+          .from("daily_log")
+          .upsert(patch, { onConflict: "date" });
+        if (error) throw error;
+        logger.info("meal recorded", { date: a.date });
+      } else if (a.kind === "propose_routine_change") {
+        setRoutinePending(chatId, {
+          change: a.change,
+          name: a.name,
+          time_slot: a.time_slot,
+          reason: a.reason,
+        });
+        logger.info("routine change proposed", { change: a.change, name: a.name });
+      } else if (a.kind === "confirm_routine_change") {
+        const p = getRoutinePending(chatId);
+        if (!p) {
+          logger.info("confirm_routine_change without pending — graceful no-op");
+          continue;
+        }
+        if (p.change === "add") {
+          const { error } = await db()
+            .from("routine_items")
+            .insert({ name: p.name, time_slot: p.time_slot, is_active: true });
+          if (error) throw error;
+          logger.info("routine item added", { name: p.name, time_slot: p.time_slot });
+        } else {
+          // remove = soft delete (is_active=false). 노션 측은 syncRoutineItems가
+          // 이름 매칭으로 같은 row 갱신하므로 다영이 노션에서도 비활성화 가능.
+          const { error } = await db()
+            .from("routine_items")
+            .update({ is_active: false })
+            .eq("name", p.name);
+          if (error) throw error;
+          logger.info("routine item deactivated", { name: p.name });
+        }
+        clearRoutinePending(chatId);
+      } else if (a.kind === "cancel_routine_change") {
+        clearRoutinePending(chatId);
+        logger.info("routine change cancelled");
       } else {
         // exhaustive check — ensures TS errors when new Action kinds added without a handler
         const _exhaustive: never = a;
