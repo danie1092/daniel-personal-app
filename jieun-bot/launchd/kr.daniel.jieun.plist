@@ -9,11 +9,14 @@
   <key>WorkingDirectory</key>
   <string>/Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot</string>
 
+  <!-- bash로 감싸서 부팅 시 build 먼저. exec로 node가 bash PID 대체 -->
+  <!-- (그래야 launchd가 node 프로세스를 직접 감시). build 실패 시 종료 → -->
+  <!-- KeepAlive + ThrottleInterval=10으로 ~10초마다 재시도. -->
   <key>ProgramArguments</key>
   <array>
-    <string>/opt/homebrew/bin/node</string>
-    <string>--enable-source-maps</string>
-    <string>/Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot/dist/index.js</string>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>cd /Users/daniel_home/daniel-personal-app/.claude/worktrees/blissful-gates-fa9b73/jieun-bot &amp;&amp; npm run build &amp;&amp; exec /opt/homebrew/bin/node --enable-source-maps dist/index.js</string>
   </array>
 
   <key>EnvironmentVariables</key>
