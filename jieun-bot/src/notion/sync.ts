@@ -4,7 +4,15 @@ import {
   getNotionPageId,
   getRowIdByNotionPage,
   recordSync,
+  deleteSyncMapRow,
 } from "../db/notionSyncMap.js";
+
+// 노션 페이지가 archived(휴지통) 상태일 때 update 시 던지는 에러 메시지의 핵심 토큰.
+// validation_error code도 같이 보지만 메시지 매칭이 더 안전.
+function isArchivedError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("archived") && msg.includes("unarchive");
+}
 
 const T = (s: string) => [{ text: { content: s } }];
 const trimText = (s: string, n: number) => (s.length > n ? s.slice(0, n) : s);
@@ -97,6 +105,7 @@ export async function syncRoutineChecks(sinceDays = 14): Promise<number> {
   if (error) throw error;
 
   let pushed = 0;
+  let archivedCleaned = 0;
   for (const c of checks ?? []) {
     const itemId = c.item_id as string;
     const date = c.date as string;
@@ -111,16 +120,31 @@ export async function syncRoutineChecks(sinceDays = 14): Promise<number> {
     if (itemNotionId) {
       properties["항목"] = { relation: [{ id: itemNotionId }] };
     }
-    if (existing) {
-      await notion().pages.update({ page_id: existing, properties });
-    } else {
-      const created = await notion().pages.create({
-        parent: { database_id: NOTION_DB.routineChecks.db },
-        properties,
-      });
-      await recordSync("routine_checks", rowKey, created.id);
-      pushed++;
+    try {
+      if (existing) {
+        await notion().pages.update({ page_id: existing, properties });
+      } else {
+        const created = await notion().pages.create({
+          parent: { database_id: NOTION_DB.routineChecks.db },
+          properties,
+        });
+        await recordSync("routine_checks", rowKey, created.id);
+        pushed++;
+      }
+    } catch (err) {
+      // 사용자가 노션에서 휴지통으로 보낸 페이지 → sync_map row 정리해서
+      // 다음 사이클에 새로 만들게 하고 1행 실패가 전체 sync 막지 않게.
+      if (isArchivedError(err) && existing) {
+        await deleteSyncMapRow("routine_checks", rowKey);
+        archivedCleaned++;
+        continue;
+      }
+      throw err;
     }
+  }
+  if (archivedCleaned > 0) {
+    // 다음 사이클을 위해 통계만 — 다음 호출에서 자동 복구.
+    // (logger 직접 못 쓰는 함수라 호출자 stage 로그에 묻혀도 OK.)
   }
   return pushed;
 }
@@ -239,9 +263,17 @@ export async function syncDailyLog(sinceDays = 14): Promise<number> {
     setText("저녁", row.dinner);
 
     const existing = await getNotionPageId("daily_log", date);
+    let needsCreate = !existing;
     if (existing) {
-      await notion().pages.update({ page_id: existing, properties });
-    } else {
+      try {
+        await notion().pages.update({ page_id: existing, properties });
+      } catch (err) {
+        if (!isArchivedError(err)) throw err;
+        await deleteSyncMapRow("daily_log", date);
+        needsCreate = true;
+      }
+    }
+    if (needsCreate) {
       const created = await notion().pages.create({
         parent: { database_id: NOTION_DB.dailyCondition.db },
         properties,
@@ -269,8 +301,14 @@ async function pushObservationRow(args: {
     "요약": { rich_text: T(trimText(args.summary, 1900)) },
   };
   if (existing) {
-    await notion().pages.update({ page_id: existing, properties });
-    return 0;
+    try {
+      await notion().pages.update({ page_id: existing, properties });
+      return 0;
+    } catch (err) {
+      if (!isArchivedError(err)) throw err;
+      // archived → sync_map 정리하고 새로 생성 fall-through.
+      await deleteSyncMapRow(args.table, args.rowKey);
+    }
   }
   const created = await notion().pages.create({
     parent: { database_id: NOTION_DB.observation.db },
