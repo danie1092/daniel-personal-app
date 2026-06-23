@@ -5,6 +5,12 @@ import { BudgetTabs, type BudgetTab } from "./BudgetTabs";
 import { DetailsTab } from "./DetailsTab";
 import { InputTab } from "./InputTab";
 import { SummaryTab } from "./SummaryTab";
+import { SubscriptionsTab } from "./SubscriptionsTab";
+import {
+  getRecentEntries,
+  detectSubscriptions,
+  monthlySubscriptionTotal,
+} from "@/lib/budget/subscriptions";
 
 export const dynamic = "force-dynamic";
 
@@ -30,13 +36,18 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
   const yearMonth = params.ym && YM_REGEX.test(params.ym) ? params.ym : currentYearMonth();
   const rawTab = params.tab;
   const tab: BudgetTab =
-    rawTab === "input" || rawTab === "summary" ? rawTab : "details";
+    rawTab === "input" || rawTab === "summary" || rawTab === "subs" ? rawTab : "details";
 
-  const [entries, summary, breakdown] = await Promise.all([
-    tab === "summary" ? Promise.resolve([]) : getMonthEntries(yearMonth),
+  const needsMonthEntries = tab === "details";
+  const [entries, summary, breakdown, recentForSubs] = await Promise.all([
+    needsMonthEntries ? getMonthEntries(yearMonth) : Promise.resolve([]),
     getMonthSummary(yearMonth),
     tab === "summary" ? getCategoryBreakdown(yearMonth) : Promise.resolve([]),
+    tab === "subs" ? getRecentEntries(4) : Promise.resolve([]),
   ]);
+
+  const subs = tab === "subs" ? detectSubscriptions(recentForSubs) : [];
+  const subsTotal = monthlySubscriptionTotal(subs);
 
   return (
     <div className="pb-24">
@@ -65,6 +76,9 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
       )}
       {tab === "summary" && (
         <SummaryTab summary={summary} breakdown={breakdown} />
+      )}
+      {tab === "subs" && (
+        <SubscriptionsTab subs={subs} monthlyTotal={subsTotal} summary={summary} />
       )}
     </div>
   );
