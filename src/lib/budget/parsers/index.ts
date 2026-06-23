@@ -1,8 +1,9 @@
 import type { Parsed, ParseFn } from "./types";
 import { parseHyundai } from "./hyundai";
 import { parseWoori } from "./woori";
+import { parseHana } from "./hana";
 
-const parsers: ParseFn[] = [parseHyundai, parseWoori];
+const parsers: ParseFn[] = [parseHyundai, parseWoori, parseHana];
 
 /**
  * 모든 파서를 순서대로 시도. 첫 매칭 결과 반환. 모두 null이면 null.
