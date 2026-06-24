@@ -94,9 +94,10 @@ export function attachSchedule(claude: ClaudeAdapter): void {
     { timezone: "Asia/Seoul" }
   );
 
-  // 퇴근 직전 20:30 KST — 내일 캘린더 미리 짚기
+  // 퇴근 직전 20:15 KST — 내일 캘린더 미리 짚기
+  // (20:30은 gym checkin·ops 주간 리포트와 충돌 → 15분 앞당겨 동시 발화 회피)
   cron.schedule(
-    "30 20 * * *",
+    "15 20 * * *",
     async () => {
       let calendarSection = "";
       try {
@@ -110,7 +111,7 @@ export function attachSchedule(claude: ClaudeAdapter): void {
         chatId: ownerChatId(),
         contextSection: calendarSection,
         userPrompt:
-          "지금은 20:30. 다영의 퇴근 직전. " +
+          "지금은 20:15. 다영의 퇴근 직전. " +
           "[현재 컨텍스트]에 내일 캘린더가 있으면 가볍게 짚어 (예: '내일 1시 회의 있네'). " +
           "없으면 가벼운 안부. 침묵 OK.",
       }).catch((err) => logger.error("evening brief failed", { err: String(err) }));
