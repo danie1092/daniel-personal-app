@@ -4,7 +4,7 @@ import BottomNav from "@/components/ui/BottomNav";
 
 export const metadata: Metadata = {
   title: "My App",
-  description: "가계부, 일기, 메모 관리",
+  description: "가계부, 메모 관리",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

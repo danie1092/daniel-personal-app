@@ -33,19 +33,10 @@ function MemoIcon({ active }: IconProps) {
   );
 }
 
-function DiaryIcon({ active }: IconProps) {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "var(--color-primary)" : "#C5CCD3"}>
-      <path d="M12 21s-7-4.5-7-11a4 4 0 017-2.6A4 4 0 0119 10c0 6.5-7 11-7 11z" />
-    </svg>
-  );
-}
-
 const tabs = [
   { href: "/home", label: "홈", Icon: HomeIcon },
   { href: "/budget", label: "가계부", Icon: WalletIcon },
   { href: "/memo", label: "메모", Icon: MemoIcon },
-  { href: "/diary", label: "일기", Icon: DiaryIcon },
 ];
 
 export default function BottomNav() {
