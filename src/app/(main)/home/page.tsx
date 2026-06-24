@@ -1,9 +1,7 @@
 import { getBudgetSummary } from "@/lib/budget/summary";
-import { getTodayRoutine } from "@/lib/routine/today";
 import { getRecentMemos } from "@/lib/memo/recent";
 import { HomeKPICard } from "./HomeKPICard";
 import { HomeMemoCard } from "./HomeMemoCard";
-import { HomeRoutineCard } from "./HomeRoutineCard";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
 
@@ -25,9 +23,8 @@ function getGreeting(d: Date): string {
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [budget, routine, memos] = await Promise.all([
+  const [budget, memos] = await Promise.all([
     getBudgetSummary(),
-    getTodayRoutine(),
     getRecentMemos(3),
   ]);
 
@@ -42,7 +39,6 @@ export default async function HomePage() {
 
       <HomeKPICard {...budget} />
       <HomeMemoCard memos={memos} />
-      <HomeRoutineCard {...routine} />
     </div>
   );
 }
