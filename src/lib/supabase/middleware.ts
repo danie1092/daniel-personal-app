@@ -25,9 +25,10 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims: 비대칭(ES256) JWT를 로컬에서 검증 → 매 네비게이션 Auth 서버 왕복 제거.
+  // 토큰 만료 시에만 내부 getSession이 네트워크로 갱신(쿠키 재기록)을 처리한다.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims ?? null;
 
   if (
     !user &&

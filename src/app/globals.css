@@ -1,4 +1,4 @@
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css');
+/* Pretendard는 layout.tsx <head>에서 dynamic-subset 한 번만 로드 (중복·풀버전 @import 제거) */
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════
