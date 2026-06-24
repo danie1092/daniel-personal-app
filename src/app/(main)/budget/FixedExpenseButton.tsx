@@ -21,9 +21,9 @@ export function FixedExpenseButton({ yearMonth }: { yearMonth: string }) {
 
   return (
     <div className="bg-surface rounded-card p-4 mb-3 border border-hair shadow-card">
-      <div className="text-[14px] font-bold mb-1">고정지출 일괄 추가</div>
+      <div className="text-[14px] font-bold mb-1">고정비 일괄 추가</div>
       <div className="text-[12px] text-ink-sub mb-3">
-        이번 달 고정지출(보험, 통신비, 관리비 등)을 일괄 추가. 이미 있는 항목은 스킵.
+        이번 달 고정비(보험, 통신비, 관리비 등)을 일괄 추가. 이미 있는 항목은 스킵.
       </div>
       <button
         onClick={handleClick}

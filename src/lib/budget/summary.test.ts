@@ -47,9 +47,9 @@ describe("getBudgetSummary", () => {
     expect(result.monthSpending).toBe(0);
   });
 
-  test("monthlyBudget은 상수 2_000_000 반환", async () => {
+  test("monthlyBudget은 카테고리 예산 합(1,958,000) 반환", async () => {
     fromMock.mockReturnValueOnce(makeChain([]));
     const result = await getBudgetSummary();
-    expect(result.monthlyBudget).toBe(2_000_000);
+    expect(result.monthlyBudget).toBe(1_958_000);
   });
 });

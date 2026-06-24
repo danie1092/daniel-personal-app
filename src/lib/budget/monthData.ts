@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
+import { TOTAL_BUDGET } from "@/lib/constants";
 import type { BudgetCategory } from "./categoryTokens";
 
-const MONTHLY_BUDGET = 2_000_000;
+const MONTHLY_BUDGET = TOTAL_BUDGET;
 
 export type BudgetEntry = {
   id: string;
@@ -72,7 +73,7 @@ export async function getMonthSummary(yearMonth: string): Promise<MonthSummary> 
   for (const r of rows) {
     if (r.type === "expense") {
       spendingWithFixed += r.amount;
-      if (r.category !== "고정지출") spending += r.amount;
+      if (r.category !== "고정비") spending += r.amount;
     } else if (r.type === "income") income += r.amount;
     else if (r.type === "saving") saving += r.amount;
   }

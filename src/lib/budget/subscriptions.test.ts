@@ -17,7 +17,7 @@ type Row = {
 function row(p: Partial<Row>): Row {
   return {
     date: "2026-06-01",
-    category: "구독",
+    category: "구독·렌탈",
     description: null,
     memo: null,
     amount: 9900,
@@ -57,7 +57,7 @@ describe("detectSubscriptions", () => {
 
   test("'구독' 카테고리는 1개월만 있어도 신규로 잡는다", () => {
     const subs = detectSubscriptions(
-      [row({ date: "2026-06-03", description: "디즈니플러스", category: "구독", amount: 9900 })],
+      [row({ date: "2026-06-03", description: "디즈니플러스", category: "구독·렌탈", amount: 9900 })],
       { nowYearMonth: "2026-06" }
     );
     expect(subs).toHaveLength(1);
@@ -68,8 +68,8 @@ describe("detectSubscriptions", () => {
   test("일회성 식사는 구독으로 잡지 않는다", () => {
     const subs = detectSubscriptions(
       [
-        row({ date: "2026-06-01", description: "김밥천국", category: "식사", amount: 8000 }),
-        row({ date: "2026-06-15", description: "맥도날드", category: "식사", amount: 7000 }),
+        row({ date: "2026-06-01", description: "김밥천국", category: "외식", amount: 8000 }),
+        row({ date: "2026-06-15", description: "맥도날드", category: "외식", amount: 7000 }),
       ],
       { nowYearMonth: "2026-06" }
     );
@@ -120,9 +120,9 @@ describe("detectSubscriptions", () => {
   test("금액이 달라도 중앙값을 대표금액으로 쓴다 (관리비 등)", () => {
     const subs = detectSubscriptions(
       [
-        row({ date: "2026-04-05", description: "관리비", category: "고정지출", amount: 120000 }),
-        row({ date: "2026-05-05", description: "관리비", category: "고정지출", amount: 150000 }),
-        row({ date: "2026-06-05", description: "관리비", category: "고정지출", amount: 135000 }),
+        row({ date: "2026-04-05", description: "관리비", category: "고정비", amount: 120000 }),
+        row({ date: "2026-05-05", description: "관리비", category: "고정비", amount: 150000 }),
+        row({ date: "2026-06-05", description: "관리비", category: "고정비", amount: 135000 }),
       ],
       { nowYearMonth: "2026-06" }
     );
@@ -133,8 +133,8 @@ describe("detectSubscriptions", () => {
   test("2달 넘게 끊기면 irregular", () => {
     const subs = detectSubscriptions(
       [
-        row({ date: "2026-01-10", description: "헬스장", category: "취미", amount: 50000 }),
-        row({ date: "2026-06-10", description: "헬스장", category: "취미", amount: 50000 }),
+        row({ date: "2026-01-10", description: "헬스장", category: "기타", amount: 50000 }),
+        row({ date: "2026-06-10", description: "헬스장", category: "기타", amount: 50000 }),
       ],
       { nowYearMonth: "2026-06" }
     );
@@ -149,8 +149,8 @@ describe("monthlySubscriptionTotal", () => {
       [
         row({ date: "2026-05-10", description: "넷플릭스", amount: 9900 }),
         row({ date: "2026-06-10", description: "넷플릭스", amount: 9900 }),
-        row({ date: "2026-01-10", description: "헬스장", category: "취미", amount: 50000 }),
-        row({ date: "2026-06-10", description: "헬스장", category: "취미", amount: 50000 }),
+        row({ date: "2026-01-10", description: "헬스장", category: "기타", amount: 50000 }),
+        row({ date: "2026-06-10", description: "헬스장", category: "기타", amount: 50000 }),
       ],
       { nowYearMonth: "2026-06" }
     );

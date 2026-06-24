@@ -6,11 +6,13 @@ import { DetailsTab } from "./DetailsTab";
 import { InputTab } from "./InputTab";
 import { SummaryTab } from "./SummaryTab";
 import { SubscriptionsTab } from "./SubscriptionsTab";
+import { BudgetTrackerTab } from "./BudgetTrackerTab";
 import {
   getRecentEntries,
   detectSubscriptions,
   monthlySubscriptionTotal,
 } from "@/lib/budget/subscriptions";
+import { buildBudgetTracker } from "@/lib/budget/budgetTracker";
 
 export const dynamic = "force-dynamic";
 
@@ -36,18 +38,26 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
   const yearMonth = params.ym && YM_REGEX.test(params.ym) ? params.ym : currentYearMonth();
   const rawTab = params.tab;
   const tab: BudgetTab =
-    rawTab === "input" || rawTab === "summary" || rawTab === "subs" ? rawTab : "details";
+    rawTab === "input" || rawTab === "summary" || rawTab === "subs" || rawTab === "tracker"
+      ? rawTab
+      : "details";
 
   const needsMonthEntries = tab === "details";
+  const needsBreakdown = tab === "summary" || tab === "tracker";
   const [entries, summary, breakdown, recentForSubs] = await Promise.all([
     needsMonthEntries ? getMonthEntries(yearMonth) : Promise.resolve([]),
     getMonthSummary(yearMonth),
-    tab === "summary" ? getCategoryBreakdown(yearMonth) : Promise.resolve([]),
+    needsBreakdown ? getCategoryBreakdown(yearMonth) : Promise.resolve([]),
     tab === "subs" ? getRecentEntries(4) : Promise.resolve([]),
   ]);
 
   const subs = tab === "subs" ? detectSubscriptions(recentForSubs) : [];
   const subsTotal = monthlySubscriptionTotal(subs);
+
+  const tracker =
+    tab === "tracker"
+      ? buildBudgetTracker(Object.fromEntries(breakdown.map((b) => [b.category, b.amount])))
+      : null;
 
   return (
     <div className="pb-24">
@@ -68,6 +78,9 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
         <Suspense fallback={null}>
           <DetailsTab entries={entries} summary={summary} todayStr={todayStr()} />
         </Suspense>
+      )}
+      {tab === "tracker" && tracker && (
+        <BudgetTrackerTab tracker={tracker} summary={summary} />
       )}
       {tab === "input" && (
         <Suspense fallback={null}>
