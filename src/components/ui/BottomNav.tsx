@@ -41,21 +41,11 @@ function DiaryIcon({ active }: IconProps) {
   );
 }
 
-function RoutineIcon({ active }: IconProps) {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "var(--color-primary)" : "#C5CCD3"}>
-      <circle cx="12" cy="12" r="10" />
-      <path d="M7 12l3 3 7-7" stroke="white" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 const tabs = [
   { href: "/home", label: "홈", Icon: HomeIcon },
   { href: "/budget", label: "가계부", Icon: WalletIcon },
   { href: "/memo", label: "메모", Icon: MemoIcon },
   { href: "/diary", label: "일기", Icon: DiaryIcon },
-  { href: "/routine", label: "루틴", Icon: RoutineIcon },
 ];
 
 export default function BottomNav() {

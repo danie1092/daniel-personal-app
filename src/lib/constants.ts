@@ -60,17 +60,6 @@ export const DIARY_EMOTIONS = [
   "😐 보통",
 ] as const;
 
-export const ROUTINE_ITEMS = [
-  { id: "wake", label: "기상" },
-  { id: "meal1", label: "식사 1끼" },
-  { id: "meal2", label: "식사 2끼" },
-  { id: "supplement", label: "영양제" },
-  { id: "relax", label: "여유" },
-  { id: "exercise", label: "운동" },
-] as const;
-
-export const ROUTINE_LEVELS = [50, 70, 100] as const;
-
 function r(amount: number) {
   return Math.round(amount / 1000) * 1000;
 }

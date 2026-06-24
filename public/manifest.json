@@ -1,7 +1,7 @@
 {
   "name": "My Personal App",
   "short_name": "My App",
-  "description": "가계부, 일기, 메모, 루틴 관리 앱",
+  "description": "가계부, 일기, 메모 관리 앱",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
