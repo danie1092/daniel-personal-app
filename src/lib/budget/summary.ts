@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
+import { TOTAL_BUDGET } from "@/lib/constants";
 
-const MONTHLY_BUDGET = 2_000_000;
+const MONTHLY_BUDGET = TOTAL_BUDGET;
 
 export type BudgetSummary = {
   monthlyBudget: number;
@@ -36,7 +37,7 @@ export async function getBudgetSummary(): Promise<BudgetSummary> {
     .select("amount, date")
     .gte("date", mStart)
     .lte("date", todayStr)
-    .neq("category", "고정지출");
+    .neq("category", "고정비");
 
   const entries = (data ?? []) as { amount: number; date: string }[];
   const monthSpending = entries.reduce((sum, e) => sum + e.amount, 0);

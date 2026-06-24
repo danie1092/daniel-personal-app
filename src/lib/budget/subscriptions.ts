@@ -47,7 +47,7 @@ export type DetectOptions = {
 };
 
 /** 분류기가 이미 구독/고정성으로 판단한 카테고리 — 신뢰하고 그대로 인정 */
-const TRUSTED_CATEGORIES = new Set(["구독", "고정지출", "할부"]);
+const TRUSTED_CATEGORIES = new Set(["구독·렌탈", "고정비"]);
 
 /** 미분류 등 비신뢰 카테고리에서 구독으로 인정할 조건 */
 const MAX_CHARGES_PER_MONTH = 1.6; // 월 1회꼴 (편의점·택시처럼 잦은 건 제외)

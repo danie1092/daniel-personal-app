@@ -1,20 +1,38 @@
 export const BUDGET_CATEGORIES = [
-  "고정지출",
-  "할부",
-  "구독",
-  "식사",
-  "카페",
-  "간식",
-  "생필품",
+  "온라인쇼핑",
+  "고정비",
+  "의료·건강",
+  "구독·렌탈",
   "교통",
-  "취미",
-  "회사",
-  "병원",
-  "도파민",
+  "카페",
+  "편의점·마트·잡화",
+  "외식",
+  "기타기호품",
+  "기타",
   "월급",
   "저축",
   "미분류",
 ] as const;
+
+/** 카테고리별 월 예산 (예산트래커.xlsx 기준). 월급·저축·미분류는 예산 대상 아님. */
+export const BUDGET_TARGETS: Partial<Record<(typeof BUDGET_CATEGORIES)[number], number>> = {
+  온라인쇼핑: 400_000,
+  고정비: 680_000,
+  "의료·건강": 50_000,
+  "구독·렌탈": 200_000,
+  교통: 110_000,
+  카페: 100_000,
+  "편의점·마트·잡화": 100_000,
+  외식: 90_000,
+  기타기호품: 48_000,
+  기타: 180_000,
+};
+
+/** 한 달 총예산 = 카테고리 예산 합 (1,958,000) */
+export const TOTAL_BUDGET = Object.values(BUDGET_TARGETS).reduce(
+  (a, b) => (a ?? 0) + (b ?? 0),
+  0
+) as number;
 
 export const PAYMENT_METHODS = [
   "현대카드",

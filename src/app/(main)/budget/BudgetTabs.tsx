@@ -4,9 +4,10 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 
 const TABS = [
   { key: "details", label: "세부내역" },
-  { key: "input", label: "입력" },
+  { key: "tracker", label: "예산" },
   { key: "summary", label: "월별요약" },
   { key: "subs", label: "구독" },
+  { key: "input", label: "입력" },
 ] as const;
 
 export type BudgetTab = (typeof TABS)[number]["key"];

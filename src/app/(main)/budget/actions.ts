@@ -197,7 +197,7 @@ export async function addFixedExpenses(yearMonth: string): Promise<ActionResult<
     const { data: existing, error: existErr } = await supabase
       .from("budget_entries")
       .select("description")
-      .eq("category", "고정지출")
+      .eq("category", "고정비")
       .gte("date", start)
       .lte("date", end);
 
@@ -213,7 +213,7 @@ export async function addFixedExpenses(yearMonth: string): Promise<ActionResult<
     const { error: insErr } = await supabase.from("budget_entries").insert(
       toInsert.map((e) => ({
         date: start,
-        category: "고정지출",
+        category: "고정비",
         description: e.description,
         memo: null,
         amount: e.amount,

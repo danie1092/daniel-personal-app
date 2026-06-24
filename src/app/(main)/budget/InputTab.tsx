@@ -17,7 +17,7 @@ export function InputTab() {
   const pathname = usePathname();
 
   const [date, setDate] = useState(todayStr());
-  const [category, setCategory] = useState<BudgetCategory>("식사");
+  const [category, setCategory] = useState<BudgetCategory>("외식");
   const [description, setDescription] = useState("");
   const [memo, setMemo] = useState("");
   const [amount, setAmount] = useState("");

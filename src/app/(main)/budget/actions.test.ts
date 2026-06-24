@@ -66,7 +66,7 @@ describe("createBudgetEntry", () => {
     insertMock.mockReturnValue({ select: vi.fn(() => ({ single: vi.fn(() => Promise.resolve({ data: { id: "new-id" }, error: null })) })) });
     const result = await createBudgetEntry({
       date: "2026-04-26",
-      category: "식사",
+      category: "외식",
       description: "김치찌개",
       memo: "점심",
       amount: 12000,

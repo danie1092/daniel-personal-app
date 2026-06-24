@@ -44,9 +44,9 @@ describe("getMonthSummary", () => {
 
   test("expense/income/saving 합산 + 잔액 계산", async () => {
     fromMock.mockReturnValueOnce(makeChain([
-      { type: "expense", category: "식사", amount: 12000 },
+      { type: "expense", category: "외식", amount: 12000 },
       { type: "expense", category: "카페", amount: 6500 },
-      { type: "expense", category: "고정지출", amount: 200000 },
+      { type: "expense", category: "고정비", amount: 200000 },
       { type: "income", category: "월급", amount: 3_000_000 },
       { type: "saving", category: "저축", amount: 500_000 },
     ]));
@@ -57,7 +57,7 @@ describe("getMonthSummary", () => {
     expect(result.income).toBe(3_000_000);
     expect(result.saving).toBe(500_000);
     expect(result.remaining).toBe(3_000_000 - 18500 - 500_000);
-    expect(result.monthlyBudget).toBe(2_000_000);
+    expect(result.monthlyBudget).toBe(1_958_000);
     expect(result.daysInMonth).toBe(30);
     expect(result.daysIntoMonth).toBe(26);
   });
