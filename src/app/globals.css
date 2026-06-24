@@ -65,6 +65,16 @@ input, textarea, button {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* PIN 입력 오류 시 흔들림 */
+@keyframes pin-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-7px); }
+  40%, 80% { transform: translateX(7px); }
+}
+.animate-pin-shake {
+  animation: pin-shake 0.4s ease-in-out;
+}
+
 /* Hide scrollbar */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
