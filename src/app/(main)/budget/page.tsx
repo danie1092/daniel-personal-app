@@ -13,12 +13,12 @@ import {
   monthlySubscriptionTotal,
 } from "@/lib/budget/subscriptions";
 import { buildBudgetTracker } from "@/lib/budget/budgetTracker";
+import { budgetMonthOf } from "@/lib/budget/cycle";
 
 export const dynamic = "force-dynamic";
 
 function currentYearMonth(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  return budgetMonthOf(new Date());
 }
 
 function todayStr(): string {

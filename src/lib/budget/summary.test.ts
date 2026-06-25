@@ -36,7 +36,7 @@ describe("getBudgetSummary", () => {
     expect(result.todaySpending).toBe(18500);  // 오늘 2건
     expect(result.weekSpending).toBe(18500);    // 4/26(일) 시작 주, 오늘만 포함
     expect(result.monthSpending).toBe(82500);   // 4월 전체
-    expect(result.daysIntoMonth).toBe(26);
+    expect(result.daysIntoMonth).toBe(22);       // 리셋일=5 → 4/5~4/26 = 22일째
   });
 
   test("데이터가 비어도 0으로 반환", async () => {

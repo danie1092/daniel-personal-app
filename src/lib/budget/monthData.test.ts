@@ -58,8 +58,8 @@ describe("getMonthSummary", () => {
     expect(result.saving).toBe(500_000);
     expect(result.remaining).toBe(3_000_000 - 18500 - 500_000);
     expect(result.monthlyBudget).toBe(1_958_000);
-    expect(result.daysInMonth).toBe(30);
-    expect(result.daysIntoMonth).toBe(26);
+    expect(result.daysInMonth).toBe(30);         // 리셋일=5 → 4/5~5/4 = 30일
+    expect(result.daysIntoMonth).toBe(22);       // 4/5~4/26 = 22일째
   });
 });
 
