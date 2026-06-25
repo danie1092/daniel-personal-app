@@ -37,6 +37,7 @@ export const TOTAL_BUDGET = Object.values(BUDGET_TARGETS).reduce(
 export const PAYMENT_METHODS = [
   "현대카드",
   "우리카드",
+  "하나카드",
   "현금",
   "체크",
 ] as const;
