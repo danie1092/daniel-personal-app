@@ -6,6 +6,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 import { getMonthEntries, getMonthSummary, getCategoryBreakdown } from "./monthData";
+import { cycleDays } from "./cycle";
 
 function makeChain(data: unknown) {
   const chain: Record<string, unknown> = {};
@@ -58,8 +59,10 @@ describe("getMonthSummary", () => {
     expect(result.saving).toBe(500_000);
     expect(result.remaining).toBe(3_000_000 - 18500 - 500_000);
     expect(result.monthlyBudget).toBe(1_958_000);
-    expect(result.daysInMonth).toBe(30);         // 리셋일=5 → 4/5~5/4 = 30일
-    expect(result.daysIntoMonth).toBe(22);       // 4/5~4/26 = 22일째
+    // 일수는 리셋일 설정(BUDGET_RESET_DAY)에 따라 달라지므로 cycle 헬퍼에서 파생해 검증
+    const exp = cycleDays("2026-04", new Date());
+    expect(result.daysInMonth).toBe(exp.daysInCycle);
+    expect(result.daysIntoMonth).toBe(exp.daysIntoCycle);
   });
 });
 
