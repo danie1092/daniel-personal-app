@@ -1,6 +1,13 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { budgetMonthRange } from "@/lib/budget/cycle";
+import { BUDGET_RESET_DAY } from "@/lib/constants";
+
+function mdLabel(iso: string): string {
+  const [, mm, dd] = iso.split("-");
+  return `${Number(mm)}.${Number(dd)}`;
+}
 
 function shiftMonth(yearMonth: string, delta: number): string {
   const [y, m] = yearMonth.split("-").map(Number);
@@ -33,8 +40,16 @@ export function BudgetMonthSelector({ currentYearMonth }: { currentYearMonth: st
       >
         ‹
       </button>
-      <div className="px-2 text-[13px] font-bold tabular-nums">
-        {y}년 {m}월
+      <div className="px-2 text-center leading-tight">
+        <div className="text-[13px] font-bold tabular-nums">{y}년 {m}월</div>
+        {BUDGET_RESET_DAY !== 1 && (() => {
+          const { start, end } = budgetMonthRange(currentYearMonth);
+          return (
+            <div className="text-[9px] text-ink-muted tabular-nums">
+              {mdLabel(start)}~{mdLabel(end)}
+            </div>
+          );
+        })()}
       </div>
       <button
         onClick={() => go(shiftMonth(currentYearMonth, 1))}

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { TOTAL_BUDGET } from "@/lib/constants";
 import type { BudgetCategory } from "./categoryTokens";
+import { budgetMonthRange, cycleDays } from "./cycle";
 
 const MONTHLY_BUDGET = TOTAL_BUDGET;
 
@@ -34,17 +35,9 @@ export type CategoryBreakdown = {
   pct: number;
 };
 
-function monthRange(yearMonth: string): { start: string; end: string } {
-  const [y, m] = yearMonth.split("-").map(Number);
-  const start = `${yearMonth}-01`;
-  const lastDay = new Date(y, m, 0).getDate();
-  const end = `${yearMonth}-${String(lastDay).padStart(2, "0")}`;
-  return { start, end };
-}
-
 export async function getMonthEntries(yearMonth: string): Promise<BudgetEntry[]> {
   const supabase = await createClient();
-  const { start, end } = monthRange(yearMonth);
+  const { start, end } = budgetMonthRange(yearMonth);
   const { data } = await supabase
     .from("budget_entries")
     .select("id, date, category, description, memo, amount, payment_method, type, created_at")
@@ -56,7 +49,7 @@ export async function getMonthEntries(yearMonth: string): Promise<BudgetEntry[]>
 
 export async function getMonthSummary(yearMonth: string): Promise<MonthSummary> {
   const supabase = await createClient();
-  const { start, end } = monthRange(yearMonth);
+  const { start, end } = budgetMonthRange(yearMonth);
   const { data } = await supabase
     .from("budget_entries")
     .select("type, category, amount")
@@ -78,11 +71,7 @@ export async function getMonthSummary(yearMonth: string): Promise<MonthSummary> 
     else if (r.type === "saving") saving += r.amount;
   }
 
-  const [y, m] = yearMonth.split("-").map(Number);
-  const today = new Date();
-  const isCurrentMonth = today.getFullYear() === y && today.getMonth() + 1 === m;
-  const daysInMonth = new Date(y, m, 0).getDate();
-  const daysIntoMonth = isCurrentMonth ? today.getDate() : daysInMonth;
+  const { daysInCycle, daysIntoCycle } = cycleDays(yearMonth, new Date());
 
   return {
     yearMonth,
@@ -92,8 +81,8 @@ export async function getMonthSummary(yearMonth: string): Promise<MonthSummary> 
     income,
     saving,
     remaining: income - spending - saving,
-    daysInMonth,
-    daysIntoMonth,
+    daysInMonth: daysInCycle,
+    daysIntoMonth: daysIntoCycle,
   };
 }
 

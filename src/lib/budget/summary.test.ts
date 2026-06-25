@@ -6,6 +6,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 import { getBudgetSummary } from "./summary";
+import { cycleDays, budgetMonthOf } from "./cycle";
 
 function makeChain(data: unknown) {
   const chain: Record<string, unknown> = {};
@@ -36,7 +37,8 @@ describe("getBudgetSummary", () => {
     expect(result.todaySpending).toBe(18500);  // 오늘 2건
     expect(result.weekSpending).toBe(18500);    // 4/26(일) 시작 주, 오늘만 포함
     expect(result.monthSpending).toBe(82500);   // 4월 전체
-    expect(result.daysIntoMonth).toBe(26);
+    // 리셋일 설정 무관하게 cycle 헬퍼에서 파생 검증
+    expect(result.daysIntoMonth).toBe(cycleDays(budgetMonthOf(new Date()), new Date()).daysIntoCycle);
   });
 
   test("데이터가 비어도 0으로 반환", async () => {

@@ -34,6 +34,14 @@ export const TOTAL_BUDGET = Object.values(BUDGET_TARGETS).reduce(
   0
 ) as number;
 
+/**
+ * 가계부 사이클 리셋일. "한 달" = 매월 이 날 ~ 다음달 (이 날-1).
+ * 1 = 달력월(1일~말일). 개인 지출 예산엔 달력월이 맞음(예산 타깃·고정비·직관 일치).
+ * 사업이익 정산일 같은 회계 이벤트는 "쓸 돈 리셋"이 아니므로 여기 맞추지 않음.
+ * 향후 진짜 현금흐름 사이클(예: 월급날)에 맞추고 싶으면 이 값만 바꾸면 전체 반영됨. (1~28)
+ */
+export const BUDGET_RESET_DAY: number = 1;
+
 export const PAYMENT_METHODS = [
   "현대카드",
   "우리카드",
