@@ -45,6 +45,8 @@ export const BUDGET_RESET_DAY: number = 1;
 export const PAYMENT_METHODS = [
   "현대카드",
   "우리카드",
+  "하나(신용)",
+  "하나(체크)",
   "하나카드",
   "현금",
   "체크",
