@@ -11,7 +11,7 @@ describe("parseHana", () => {
       amount: 22750,
       merchant: "쿠팡(쿠페이)",
       date: "2026-06-23",
-      payment_method: "하나카드",
+      payment_method: "하나(체크)",
     });
   });
 
@@ -22,8 +22,25 @@ describe("parseHana", () => {
       amount: 12000,
       merchant: "스타벅스",
       date: "2026-06-23",
-      payment_method: "하나카드",
+      payment_method: "하나(신용)",
     });
+  });
+
+  test("간편결제(종류 미표기) — 앞자리 7*1* → 신용, 일시불/누적 꼬리 제거", () => {
+    const text = `[Web발신]
+하나7*1*승인 함*영 35,570원 일시불 07/01 23:53 쿠팡(쿠페이) 누적6,957,283원`;
+    expect(parseHana(text, new Date("2026-07-02T00:00:00+09:00"))).toEqual({
+      amount: 35570,
+      merchant: "쿠팡(쿠페이)",
+      date: "2026-07-01",
+      payment_method: "하나(신용)",
+    });
+  });
+
+  test("간편결제(종류 미표기) — 앞자리 3*0* → 체크", () => {
+    const text = `[Web발신]
+하나3*0*승인 함*영 4,500원 일시불 07/01 12:00 메가엠지씨커피`;
+    expect(parseHana(text, new Date("2026-07-02T00:00:00+09:00"))?.payment_method).toBe("하나(체크)");
   });
 
   test("가맹점 이름에 공백/괄호 있어도 끝까지 가져온다", () => {
