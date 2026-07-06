@@ -26,10 +26,10 @@ describe("buildBudgetTracker", () => {
     expect(t.totalSpent).toBe(10_000); // 예산 카테고리 지출만
   });
 
-  test("총예산 = 1,958,000", () => {
+  test("총예산 = 2,259,000 (변동 1,178,000 + 고정비 목록 합 1,081,000)", () => {
     const t = buildBudgetTracker({});
-    expect(t.totalBudget).toBe(1_958_000);
-    expect(t.totalRemaining).toBe(1_958_000);
+    expect(t.totalBudget).toBe(2_259_000);
+    expect(t.totalRemaining).toBe(2_259_000);
   });
 
   test("초과 시 remaining 음수", () => {

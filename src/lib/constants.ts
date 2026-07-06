@@ -14,12 +14,37 @@ export const BUDGET_CATEGORIES = [
   "미분류",
 ] as const;
 
-/** 카테고리별 월 예산 (예산트래커.xlsx 기준). 월급·저축·미분류는 예산 대상 아님. */
+function r(amount: number) {
+  return Math.round(amount / 1000) * 1000;
+}
+
+export const FIXED_EXPENSES = [
+  { description: "건강보험", amount: r(87595),  paymentMethod: "우리카드" },
+  { description: "삼성화재", amount: r(219513), paymentMethod: "현대카드" },
+  { description: "통신비",   amount: r(290151), paymentMethod: "현대카드" }, // 로밍 포함이라 향후 줄어들 예정
+  { description: "구독",     amount: r(12663),  paymentMethod: "우리카드" },
+  // Claude Max $110 — 2026-07-06 환율 1,543원/$ 기준. 환율 오르면 갱신
+  { description: "클로드 구독", amount: r(169730), paymentMethod: "현대카드" },
+  { description: "가스비",   amount: r(112920), paymentMethod: "우리카드" },
+  { description: "전기료",   amount: r(29410),  paymentMethod: "현금" },
+  { description: "수도",     amount: r(23910),  paymentMethod: "현금" },
+  { description: "코웨이",   amount: r(94279),  paymentMethod: "우리카드" },
+  { description: "관리비",   amount: r(40000),  paymentMethod: "현금" },
+  // 주담대는 지출이 아니라 별도 관리(자산 성격)라 고정비 목록에서 제외
+] as const;
+
+/** 고정비 목록 합계 (1,081,000) — 고정비 예산 타깃은 여기서 파생, 목록 수정하면 자동 반영 */
+export const FIXED_EXPENSES_TOTAL: number = FIXED_EXPENSES.reduce(
+  (sum, e) => sum + e.amount,
+  0
+);
+
+/** 카테고리별 월 예산. 고정비는 FIXED_EXPENSES 합계에서 파생. 월급·저축·미분류는 예산 대상 아님. */
 export const BUDGET_TARGETS: Partial<Record<(typeof BUDGET_CATEGORIES)[number], number>> = {
   온라인쇼핑: 400_000,
-  고정비: 680_000,
+  고정비: FIXED_EXPENSES_TOTAL,
   "의료·건강": 50_000,
-  "구독·렌탈": 200_000,
+  "구독·렌탈": 100_000, // 유튜브·네이버·쿠팡 정도 (코웨이·클로드는 고정비로)
   교통: 110_000,
   카페: 100_000,
   "편의점·마트·잡화": 100_000,
@@ -28,14 +53,14 @@ export const BUDGET_TARGETS: Partial<Record<(typeof BUDGET_CATEGORIES)[number], 
   기타: 180_000,
 };
 
-/** 한 달 총예산 = 카테고리 예산 합 (1,958,000) */
+/** 한 달 총예산 = 카테고리 예산 합 (2,259,000 = 변동 1,178,000 + 고정 1,081,000) */
 export const TOTAL_BUDGET = Object.values(BUDGET_TARGETS).reduce(
   (a, b) => (a ?? 0) + (b ?? 0),
   0
 ) as number;
 
 /**
- * 변동지출 예산 = 총예산 - 고정비 타깃 (1,278,000).
+ * 변동지출 예산 = 총예산 - 고정비 타깃 (1,178,000).
  * 홈/세부내역의 지출 합계는 고정비를 제외하므로, "예산의 몇 %" 분모도 이걸 써야 정합.
  * (고정비 포함 기준으로 보는 곳 — 트래커/구독 탭 — 은 TOTAL_BUDGET 유지.)
  */
@@ -84,21 +109,3 @@ export const DIARY_EMOTIONS = [
   "😐 보통",
 ] as const;
 
-function r(amount: number) {
-  return Math.round(amount / 1000) * 1000;
-}
-
-export const FIXED_EXPENSES = [
-  { description: "건강보험", amount: r(87595),  paymentMethod: "우리카드" },
-  { description: "삼성화재", amount: r(219513), paymentMethod: "현대카드" },
-  { description: "통신비",   amount: r(290151), paymentMethod: "현대카드" },
-  { description: "구독",     amount: r(12663),  paymentMethod: "우리카드" },
-  // Claude Max $110 — 2026-07-06 환율 1,543원/$ 기준. 환율 오르면 갱신
-  { description: "클로드 구독", amount: r(169730), paymentMethod: "현대카드" },
-  { description: "가스비",   amount: r(112920), paymentMethod: "우리카드" },
-  { description: "전기료",   amount: r(29410),  paymentMethod: "현금" },
-  { description: "수도",     amount: r(23910),  paymentMethod: "현금" },
-  { description: "코웨이",   amount: r(94279),  paymentMethod: "우리카드" },
-  { description: "관리비",   amount: r(40000),  paymentMethod: "현금" },
-  // 주담대는 지출이 아니라 별도 관리(자산 성격)라 고정비 목록에서 제외
-] as const;
