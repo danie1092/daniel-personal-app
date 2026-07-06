@@ -19,9 +19,12 @@ function makeChain(data: unknown) {
   return chain;
 }
 
-/** 쿼리 2개(이번 사이클, 지난 사이클 같은 시점) 순서대로 mock */
-function mockQueries(current: unknown, prev: unknown) {
-  fromMock.mockReturnValueOnce(makeChain(current)).mockReturnValueOnce(makeChain(prev));
+/** 쿼리 3개(이번 사이클, 지난 사이클 같은 시점, 예산 편성) 순서대로 mock */
+function mockQueries(current: unknown, prev: unknown, overrides: unknown = []) {
+  fromMock
+    .mockReturnValueOnce(makeChain(current))
+    .mockReturnValueOnce(makeChain(prev))
+    .mockReturnValueOnce(makeChain(overrides));
 }
 
 describe("getBudgetSummary", () => {

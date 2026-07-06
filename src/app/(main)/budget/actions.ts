@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/auth/requireSession";
 import { revalidatePath } from "next/cache";
 import { BUDGET_CATEGORIES, PAYMENT_METHODS } from "@/lib/constants";
 import { getFixedExpenses } from "@/lib/budget/fixedExpenses";
+import { budgetMonthOf } from "@/lib/budget/cycle";
 import { entryType, NO_PAYMENT_CATEGORIES, type BudgetCategory } from "@/lib/budget/categoryTokens";
 
 export type ActionResult<T = object> =
@@ -334,6 +335,82 @@ export async function deleteFixedExpense(id: string): Promise<ActionResult> {
     return { ok: true };
   } catch (err) {
     console.error("deleteFixedExpense:", err instanceof Error ? err.message : "unknown");
+    return { ok: false, error: "Delete failed" };
+  }
+}
+
+// ── 다음달 예산 편성 (budget_plans) ──────────────────────────────
+
+const MAX_PLAN_CATEGORY = 30;
+
+/** 편성은 미래 사이클만 — 당월을 열어두면 달성률 맞추려고 예산을 고치게 된다 (사용자 결정) */
+function assertFutureCycle(yearMonth: string): { ok: true } | { ok: false; error: string } {
+  if (!YM_REGEX.test(yearMonth)) return { ok: false, error: "잘못된 yearMonth" };
+  if (yearMonth <= budgetMonthOf(new Date())) {
+    return { ok: false, error: "당월/과거 예산은 수정할 수 없어요 (다음달부터 편성 가능)" };
+  }
+  return { ok: true };
+}
+
+/** 다음달 카테고리 예산 오버라이드 또는 특별예산 항목 저장 */
+export async function upsertBudgetPlan(
+  yearMonth: string,
+  category: string,
+  amount: number
+): Promise<ActionResult> {
+  const session = await requireSession();
+  if (!session.ok) return { ok: false, error: "Unauthorized" };
+
+  const future = assertFutureCycle(yearMonth);
+  if (!future.ok) return future;
+  if (typeof category !== "string" || !category.trim() || category.length > MAX_PLAN_CATEGORY) {
+    return { ok: false, error: "잘못된 항목 이름" };
+  }
+  if (category.trim() === "고정비") {
+    return { ok: false, error: "고정비는 고정비 탭에서 관리해요" };
+  }
+  if (typeof amount !== "number" || !Number.isInteger(amount) || amount < 0 || amount > MAX_AMOUNT) {
+    return { ok: false, error: "잘못된 금액" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("budget_plans")
+      .upsert(
+        { year_month: yearMonth, category: category.trim(), amount },
+        { onConflict: "year_month,category" }
+      );
+    if (error) return { ok: false, error: "Save failed" };
+    revalidatePath("/budget");
+    return { ok: true };
+  } catch (err) {
+    console.error("upsertBudgetPlan:", err instanceof Error ? err.message : "unknown");
+    return { ok: false, error: "Save failed" };
+  }
+}
+
+/** 오버라이드 제거(기본값 복귀) 또는 특별예산 항목 삭제 */
+export async function deleteBudgetPlan(yearMonth: string, category: string): Promise<ActionResult> {
+  const session = await requireSession();
+  if (!session.ok) return { ok: false, error: "Unauthorized" };
+
+  const future = assertFutureCycle(yearMonth);
+  if (!future.ok) return future;
+  if (typeof category !== "string" || !category.trim()) return { ok: false, error: "잘못된 항목" };
+
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("budget_plans")
+      .delete()
+      .eq("year_month", yearMonth)
+      .eq("category", category);
+    if (error) return { ok: false, error: "Delete failed" };
+    revalidatePath("/budget");
+    return { ok: true };
+  } catch (err) {
+    console.error("deleteBudgetPlan:", err instanceof Error ? err.message : "unknown");
     return { ok: false, error: "Delete failed" };
   }
 }

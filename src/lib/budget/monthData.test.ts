@@ -52,9 +52,13 @@ describe("getMonthSummary", () => {
       { type: "saving", category: "저축", amount: 500_000 },
     ]));
 
-    // 두 번째 from() 호출 = fixed_expenses 합계 조회
+    // 두 번째 from() = fixed_expenses 합계, 세 번째 = budget_plans 오버라이드
     const fixedChain = { select: vi.fn(() => Promise.resolve({ data: [{ amount: 1_081_000 }], error: null })) };
     fromMock.mockReturnValueOnce(fixedChain);
+    const planChain: Record<string, unknown> = {};
+    planChain.select = vi.fn(() => planChain);
+    planChain.eq = vi.fn(() => Promise.resolve({ data: [], error: null }));
+    fromMock.mockReturnValueOnce(planChain);
 
     const result = await getMonthSummary("2026-04");
     expect(result.spending).toBe(18500);
