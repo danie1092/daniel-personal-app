@@ -2,6 +2,7 @@ import type { MonthSummary } from "@/lib/budget/monthData";
 import type { Subscription } from "@/lib/budget/subscriptions";
 import { CATEGORY_TOKENS, type BudgetCategory } from "@/lib/budget/categoryTokens";
 import { BudgetProgressBar, budgetBarColor } from "@/components/budget/BudgetProgressBar";
+import { SubscriptionDeleteButton } from "./SubscriptionDeleteButton";
 
 type Props = {
   subs: Subscription[];
@@ -85,6 +86,7 @@ export function SubscriptionsTab({ subs, monthlyTotal, summary }: Props) {
                     </div>
                   </div>
                   <div className="text-[13px] font-bold shrink-0">{won(s.typicalAmount)}</div>
+                  <SubscriptionDeleteButton merchantKey={s.key} name={s.name} />
                 </div>
               );
             })}

@@ -21,7 +21,11 @@ vi.mock("next/cache", () => ({
 }));
 
 import { createBudgetEntry, deleteBudgetEntry, addFixedExpenses, updateBudgetEntry } from "./actions";
-import { FIXED_EXPENSES } from "@/lib/constants";
+// 고정비 항목은 이제 DB(fixed_expenses)에서 온다
+const FIXED_ROWS = [
+  { id: "f1", description: "통신비", amount: 290000, payment_method: "현대카드", sort_order: 1 },
+  { id: "f2", description: "가스비", amount: 113000, payment_method: "우리카드", sort_order: 2 },
+];
 
 function authed() {
   requireSessionMock.mockResolvedValue({ ok: true, user: { id: "u1" } });
@@ -130,17 +134,22 @@ describe("addFixedExpenses", () => {
       eq: vi.fn(() => existingFromChain),
       gte: vi.fn(() => existingFromChain),
       lte: vi.fn(() => Promise.resolve({
-        // 목록 변경에 안 깨지게 상수에서 파생
-        data: FIXED_EXPENSES.map((e) => ({ description: e.description })),
+        data: FIXED_ROWS.map((e) => ({ description: e.description })),
         error: null,
       })),
     };
     fromMock.mockReturnValueOnce(existingFromChain);
+    // 두 번째 from() = fixed_expenses 목록 조회 (getFixedExpenses)
+    const fixedChain = {
+      select: vi.fn(() => fixedChain),
+      order: vi.fn(() => Promise.resolve({ data: FIXED_ROWS, error: null })),
+    };
+    fromMock.mockReturnValueOnce(fixedChain);
     const result = await addFixedExpenses("2026-04");
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.added).toBe(0);
-      expect(result.skipped).toBe(FIXED_EXPENSES.length);
+      expect(result.skipped).toBe(FIXED_ROWS.length);
     }
   });
 });

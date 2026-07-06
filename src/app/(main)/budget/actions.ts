@@ -3,7 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/lib/auth/requireSession";
 import { revalidatePath } from "next/cache";
-import { BUDGET_CATEGORIES, PAYMENT_METHODS, FIXED_EXPENSES } from "@/lib/constants";
+import { BUDGET_CATEGORIES, PAYMENT_METHODS } from "@/lib/constants";
+import { getFixedExpenses } from "@/lib/budget/fixedExpenses";
 import { entryType, NO_PAYMENT_CATEGORIES, type BudgetCategory } from "@/lib/budget/categoryTokens";
 
 export type ActionResult<T = object> =
@@ -203,8 +204,9 @@ export async function addFixedExpenses(yearMonth: string): Promise<ActionResult<
 
     if (existErr) return { ok: false, error: "Lookup failed" };
 
+    const fixedItems = await getFixedExpenses();
     const existingNames = new Set(((existing ?? []) as { description: string | null }[]).map((e) => e.description));
-    const toInsert = FIXED_EXPENSES.filter((e) => !existingNames.has(e.description));
+    const toInsert = fixedItems.filter((e) => !existingNames.has(e.description));
 
     if (toInsert.length === 0) {
       return { ok: true, added: 0, skipped: existingNames.size };
@@ -217,7 +219,7 @@ export async function addFixedExpenses(yearMonth: string): Promise<ActionResult<
         description: e.description,
         memo: null,
         amount: e.amount,
-        payment_method: e.paymentMethod,
+        payment_method: e.payment_method,
         type: "expense" as const,
       }))
     );
@@ -230,5 +232,132 @@ export async function addFixedExpenses(yearMonth: string): Promise<ActionResult<
   } catch (err) {
     console.error("addFixedExpenses:", err instanceof Error ? err.message : "unknown");
     return { ok: false, error: "Failed" };
+  }
+}
+
+// ── 고정비 항목 관리 (fixed_expenses 테이블) ──────────────────────────
+
+export type FixedExpenseInput = {
+  description: string;
+  amount: number;
+  paymentMethod: string | null;
+};
+
+function validateFixedExpense(input: FixedExpenseInput): { ok: true } | { ok: false; error: string } {
+  if (typeof input.description !== "string" || !input.description.trim() || input.description.length > MAX_DESCRIPTION) {
+    return { ok: false, error: "이름을 입력하세요" };
+  }
+  if (typeof input.amount !== "number" || !Number.isInteger(input.amount) || input.amount < 0 || input.amount > MAX_AMOUNT) {
+    return { ok: false, error: "잘못된 금액" };
+  }
+  if (input.paymentMethod !== null && !PAYMENT_METHODS.includes(input.paymentMethod as (typeof PAYMENT_METHODS)[number])) {
+    return { ok: false, error: "잘못된 결제수단" };
+  }
+  return { ok: true };
+}
+
+export async function createFixedExpense(input: FixedExpenseInput): Promise<ActionResult<{ id: string }>> {
+  const session = await requireSession();
+  if (!session.ok) return { ok: false, error: "Unauthorized" };
+  const v = validateFixedExpense(input);
+  if (!v.ok) return v;
+
+  try {
+    const supabase = await createClient();
+    // 새 항목은 목록 맨 뒤로
+    const { data: maxRow } = await supabase
+      .from("fixed_expenses")
+      .select("sort_order")
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextOrder = ((maxRow as { sort_order: number } | null)?.sort_order ?? 0) + 1;
+
+    const { data, error } = await supabase
+      .from("fixed_expenses")
+      .insert({
+        description: input.description.trim(),
+        amount: input.amount,
+        payment_method: input.paymentMethod,
+        sort_order: nextOrder,
+      })
+      .select("id")
+      .single();
+    if (error) return { ok: false, error: "Save failed" };
+    revalidatePath("/budget");
+    revalidatePath("/home");
+    return { ok: true, id: (data as { id: string }).id };
+  } catch (err) {
+    console.error("createFixedExpense:", err instanceof Error ? err.message : "unknown");
+    return { ok: false, error: "Save failed" };
+  }
+}
+
+export async function updateFixedExpense(id: string, input: FixedExpenseInput): Promise<ActionResult> {
+  const session = await requireSession();
+  if (!session.ok) return { ok: false, error: "Unauthorized" };
+  if (typeof id !== "string" || id.length === 0) return { ok: false, error: "잘못된 id" };
+  const v = validateFixedExpense(input);
+  if (!v.ok) return v;
+
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("fixed_expenses")
+      .update({
+        description: input.description.trim(),
+        amount: input.amount,
+        payment_method: input.paymentMethod,
+      })
+      .eq("id", id);
+    if (error) return { ok: false, error: "Update failed" };
+    revalidatePath("/budget");
+    revalidatePath("/home");
+    return { ok: true };
+  } catch (err) {
+    console.error("updateFixedExpense:", err instanceof Error ? err.message : "unknown");
+    return { ok: false, error: "Update failed" };
+  }
+}
+
+export async function deleteFixedExpense(id: string): Promise<ActionResult> {
+  const session = await requireSession();
+  if (!session.ok) return { ok: false, error: "Unauthorized" };
+  if (typeof id !== "string" || id.length === 0) return { ok: false, error: "잘못된 id" };
+
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.from("fixed_expenses").delete().eq("id", id);
+    if (error) return { ok: false, error: "Delete failed" };
+    revalidatePath("/budget");
+    revalidatePath("/home");
+    return { ok: true };
+  } catch (err) {
+    console.error("deleteFixedExpense:", err instanceof Error ? err.message : "unknown");
+    return { ok: false, error: "Delete failed" };
+  }
+}
+
+// ── 구독 탭 제외 목록 ─────────────────────────────────────────────
+
+/** 구독 탭 자동탐지 결과에서 이 가맹점(merchantKey)을 숨긴다 */
+export async function excludeSubscription(merchantKey: string): Promise<ActionResult> {
+  const session = await requireSession();
+  if (!session.ok) return { ok: false, error: "Unauthorized" };
+  if (typeof merchantKey !== "string" || !merchantKey.trim() || merchantKey.length > 200) {
+    return { ok: false, error: "잘못된 항목" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("subscription_exclusions")
+      .upsert({ merchant_key: merchantKey }, { onConflict: "merchant_key" });
+    if (error) return { ok: false, error: "Delete failed" };
+    revalidatePath("/budget");
+    return { ok: true };
+  } catch (err) {
+    console.error("excludeSubscription:", err instanceof Error ? err.message : "unknown");
+    return { ok: false, error: "Delete failed" };
   }
 }

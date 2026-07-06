@@ -16,9 +16,12 @@ import {
   getRecentEntries,
   detectSubscriptions,
   monthlySubscriptionTotal,
+  getSubscriptionExclusions,
 } from "@/lib/budget/subscriptions";
 import { buildBudgetTracker } from "@/lib/budget/budgetTracker";
 import { budgetMonthOf } from "@/lib/budget/cycle";
+import { getFixedExpenses, fixedExpensesTotal } from "@/lib/budget/fixedExpenses";
+import { FixedTab } from "./FixedTab";
 
 export const dynamic = "force-dynamic";
 
@@ -43,26 +46,37 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
   const yearMonth = params.ym && YM_REGEX.test(params.ym) ? params.ym : currentYearMonth();
   const rawTab = params.tab;
   const tab: BudgetTab =
-    rawTab === "input" || rawTab === "summary" || rawTab === "subs" || rawTab === "tracker"
+    rawTab === "input" || rawTab === "summary" || rawTab === "subs" ||
+    rawTab === "tracker" || rawTab === "fixed"
       ? rawTab
       : "details";
 
   const needsMonthEntries = tab === "details";
   const needsBreakdown = tab === "summary" || tab === "tracker";
-  const [entries, summary, breakdown, recentForSubs, trend] = await Promise.all([
-    needsMonthEntries ? getMonthEntries(yearMonth) : Promise.resolve([]),
-    getMonthSummary(yearMonth),
-    needsBreakdown ? getCategoryBreakdown(yearMonth) : Promise.resolve([]),
-    tab === "subs" ? getRecentEntries(4) : Promise.resolve([]),
-    tab === "summary" ? getRecentCycleSpending(yearMonth) : Promise.resolve([]),
-  ]);
+  const needsFixedItems = tab === "fixed" || tab === "tracker";
+  const [entries, summary, breakdown, recentForSubs, trend, fixedItems, exclusions] =
+    await Promise.all([
+      needsMonthEntries ? getMonthEntries(yearMonth) : Promise.resolve([]),
+      getMonthSummary(yearMonth),
+      needsBreakdown ? getCategoryBreakdown(yearMonth) : Promise.resolve([]),
+      tab === "subs" ? getRecentEntries(4) : Promise.resolve([]),
+      tab === "summary" ? getRecentCycleSpending(yearMonth) : Promise.resolve([]),
+      needsFixedItems ? getFixedExpenses() : Promise.resolve([]),
+      tab === "subs" ? getSubscriptionExclusions() : Promise.resolve(new Set<string>()),
+    ]);
 
-  const subs = tab === "subs" ? detectSubscriptions(recentForSubs) : [];
+  const subs =
+    tab === "subs"
+      ? detectSubscriptions(recentForSubs).filter((s) => !exclusions.has(s.key))
+      : [];
   const subsTotal = monthlySubscriptionTotal(subs);
 
   const tracker =
     tab === "tracker"
-      ? buildBudgetTracker(Object.fromEntries(breakdown.map((b) => [b.category, b.amount])))
+      ? buildBudgetTracker(
+          Object.fromEntries(breakdown.map((b) => [b.category, b.amount])),
+          fixedExpensesTotal(fixedItems)
+        )
       : null;
 
   return (
@@ -99,6 +113,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
       {tab === "subs" && (
         <SubscriptionsTab subs={subs} monthlyTotal={subsTotal} summary={summary} />
       )}
+      {tab === "fixed" && <FixedTab items={fixedItems} />}
     </div>
   );
 }

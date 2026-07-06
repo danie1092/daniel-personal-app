@@ -9,6 +9,8 @@ import type { BudgetEntry } from "./monthData";
  */
 
 export type Subscription = {
+  /** 그룹핑 키 (merchantKey) — 제외 목록 매칭용 */
+  key: string;
   /** 정규화된 표시 이름 (가맹점) */
   name: string;
   /** 대표 카테고리 (가장 자주 붙은 것) */
@@ -127,7 +129,7 @@ export function detectSubscriptions(
   }
 
   const subs: Subscription[] = [];
-  for (const [, items] of groups) {
+  for (const [key, items] of groups) {
     const months = [...new Set(items.map((e) => yearMonth(e.date)))].sort();
     // 대표 카테고리 (최빈)
     const catCount = new Map<string, number>();
@@ -160,7 +162,8 @@ export function detectSubscriptions(
     const name = (sortedByDate[0].description || sortedByDate[0].memo || "").trim();
 
     subs.push({
-      name: name || merchantKey(sortedByDate[0]),
+      key,
+      name: name || key,
       category,
       typicalAmount: med,
       months,
@@ -197,4 +200,11 @@ export function monthlySubscriptionTotal(subs: Subscription[]): number {
   return subs
     .filter((s) => s.cadence === "monthly")
     .reduce((sum, s) => sum + s.typicalAmount, 0);
+}
+
+/** 구독 탭에서 사용자가 "이건 구독 아님"으로 지운 가맹점 키 목록 */
+export async function getSubscriptionExclusions(): Promise<Set<string>> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("subscription_exclusions").select("merchant_key");
+  return new Set(((data ?? []) as { merchant_key: string }[]).map((r) => r.merchant_key));
 }
