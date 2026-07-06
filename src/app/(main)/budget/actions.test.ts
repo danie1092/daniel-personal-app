@@ -21,6 +21,7 @@ vi.mock("next/cache", () => ({
 }));
 
 import { createBudgetEntry, deleteBudgetEntry, addFixedExpenses, updateBudgetEntry } from "./actions";
+import { FIXED_EXPENSES } from "@/lib/constants";
 
 function authed() {
   requireSessionMock.mockResolvedValue({ ok: true, user: { id: "u1" } });
@@ -129,12 +130,8 @@ describe("addFixedExpenses", () => {
       eq: vi.fn(() => existingFromChain),
       gte: vi.fn(() => existingFromChain),
       lte: vi.fn(() => Promise.resolve({
-        data: [
-          { description: "건강보험" }, { description: "삼성화재" }, { description: "통신비" },
-          { description: "구독" }, { description: "가스비" }, { description: "전기료" },
-          { description: "수도" }, { description: "코웨이" }, { description: "관리비" },
-          { description: "주담대" },
-        ],
+        // 목록 변경에 안 깨지게 상수에서 파생
+        data: FIXED_EXPENSES.map((e) => ({ description: e.description })),
         error: null,
       })),
     };
@@ -143,7 +140,7 @@ describe("addFixedExpenses", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.added).toBe(0);
-      expect(result.skipped).toBe(10);
+      expect(result.skipped).toBe(FIXED_EXPENSES.length);
     }
   });
 });

@@ -87,6 +87,8 @@ export const FIXED_EXPENSES = [
   { description: "삼성화재", amount: r(219513), paymentMethod: "현대카드" },
   { description: "통신비",   amount: r(290151), paymentMethod: "현대카드" },
   { description: "구독",     amount: r(12663),  paymentMethod: "우리카드" },
+  // Claude Max $110 — 2026-07-06 환율 1,543원/$ 기준. 환율 오르면 갱신
+  { description: "클로드 구독", amount: r(169730), paymentMethod: "현대카드" },
   { description: "가스비",   amount: r(112920), paymentMethod: "우리카드" },
   { description: "전기료",   amount: r(29410),  paymentMethod: "현금" },
   { description: "수도",     amount: r(23910),  paymentMethod: "현금" },
