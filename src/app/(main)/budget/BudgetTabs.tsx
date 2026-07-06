@@ -7,6 +7,7 @@ const TABS = [
   { key: "tracker", label: "예산" },
   { key: "summary", label: "월별요약" },
   { key: "subs", label: "구독" },
+  { key: "fixed", label: "고정비" },
   { key: "input", label: "입력" },
 ] as const;
 
@@ -29,7 +30,7 @@ export function BudgetTabs({ active }: { active: BudgetTab }) {
   }
 
   return (
-    <div className="flex gap-1.5 px-4 pb-2 bg-surface">
+    <div className="flex gap-1.5 px-4 pb-2 bg-surface overflow-x-auto scrollbar-hide">
       {TABS.map((t) => {
         const isActive = active === t.key;
         return (
@@ -38,8 +39,8 @@ export function BudgetTabs({ active }: { active: BudgetTab }) {
             onClick={() => go(t.key)}
             className={
               isActive
-                ? "px-3 py-1.5 rounded-input bg-ink text-white text-[12px] font-bold"
-                : "px-3 py-1.5 rounded-input bg-hair-light text-ink-sub text-[12px] font-semibold"
+                ? "shrink-0 px-3 py-1.5 rounded-input bg-ink text-white text-[12px] font-bold"
+                : "shrink-0 px-3 py-1.5 rounded-input bg-hair-light text-ink-sub text-[12px] font-semibold"
             }
           >
             {t.label}

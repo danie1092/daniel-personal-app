@@ -52,6 +52,10 @@ describe("getMonthSummary", () => {
       { type: "saving", category: "저축", amount: 500_000 },
     ]));
 
+    // 두 번째 from() 호출 = fixed_expenses 합계 조회
+    const fixedChain = { select: vi.fn(() => Promise.resolve({ data: [{ amount: 1_081_000 }], error: null })) };
+    fromMock.mockReturnValueOnce(fixedChain);
+
     const result = await getMonthSummary("2026-04");
     expect(result.spending).toBe(18500);
     expect(result.spendingWithFixed).toBe(218500);
