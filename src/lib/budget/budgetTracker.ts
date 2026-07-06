@@ -1,4 +1,3 @@
-import { BUDGET_TARGETS, VARIABLE_BUDGET } from "@/lib/constants";
 
 /**
  * 카테고리별 예산 대비 실제 지출 트래커 (예산트래커.xlsx '대시보드' 시트와 동일 개념).
@@ -34,16 +33,18 @@ function statusOf(ratio: number): BudgetStatus {
 /**
  * @param spentByCategory 카테고리→이번 달 지출액 (getCategoryBreakdown 결과 등)
  * @param fixedBudget 고정비 타깃 (fixed_expenses 테이블 합계)
+ * @param variableTargets 그 달의 유효 변동예산 (effectiveVariableTargets — 기본값+편성 오버라이드+특별예산)
  * 예산 카테고리는 0원이라도 모두 포함, 예산 큰 순 정렬.
  * 예산에 없는 카테고리 지출(미분류 등)은 unbudgetedSpent 로 합산.
  */
 export function buildBudgetTracker(
   spentByCategory: Record<string, number>,
-  fixedBudget: number
+  fixedBudget: number,
+  variableTargets: Record<string, number>
 ): BudgetTracker {
   const targets: Record<string, number> = {
     고정비: fixedBudget,
-    ...(BUDGET_TARGETS as Record<string, number>),
+    ...variableTargets,
   };
 
   const lines: BudgetLine[] = Object.keys(targets).map((category) => {
@@ -68,7 +69,7 @@ export function buildBudgetTracker(
   }
 
   const totalSpent = lines.reduce((s, l) => s + l.spent, 0);
-  const totalBudget = VARIABLE_BUDGET + fixedBudget;
+  const totalBudget = Object.values(targets).reduce((s, v) => s + v, 0);
   return {
     lines,
     unbudgetedSpent,

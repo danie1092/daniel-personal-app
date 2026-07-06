@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
-import { VARIABLE_BUDGET } from "@/lib/constants";
 import type { BudgetCategory } from "./categoryTokens";
 import { budgetMonthRange, cycleDays, prevBudgetMonth } from "./cycle";
 import { getFixedExpensesTotal } from "./fixedExpenses";
+import { getBudgetOverrides, effectiveVariableBudget } from "./plans";
 
 export type BudgetEntry = {
   id: string;
@@ -52,7 +52,7 @@ export async function getMonthEntries(yearMonth: string): Promise<BudgetEntry[]>
 export async function getMonthSummary(yearMonth: string): Promise<MonthSummary> {
   const supabase = await createClient();
   const { start, end } = budgetMonthRange(yearMonth);
-  const [{ data }, fixedTotal] = await Promise.all([
+  const [{ data }, fixedTotal, overrides] = await Promise.all([
     supabase
       .from("budget_entries")
       .select("type, category, amount")
@@ -60,7 +60,9 @@ export async function getMonthSummary(yearMonth: string): Promise<MonthSummary> 
       .lte("date", end)
       .order("date", { ascending: false }),
     getFixedExpensesTotal(),
+    getBudgetOverrides(yearMonth),
   ]);
+  const variableBudget = effectiveVariableBudget(overrides);
 
   const rows = (data ?? []) as { type: string; category: string; amount: number }[];
 
@@ -80,8 +82,8 @@ export async function getMonthSummary(yearMonth: string): Promise<MonthSummary> 
 
   return {
     yearMonth,
-    monthlyBudget: VARIABLE_BUDGET + fixedTotal,
-    variableBudget: VARIABLE_BUDGET,
+    monthlyBudget: variableBudget + fixedTotal,
+    variableBudget,
     spending,
     spendingWithFixed,
     income,

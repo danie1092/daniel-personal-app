@@ -8,10 +8,10 @@ const TABS = [
   { key: "summary", label: "월별요약" },
   { key: "subs", label: "구독" },
   { key: "fixed", label: "고정비" },
-  { key: "input", label: "입력" },
 ] as const;
 
-export type BudgetTab = (typeof TABS)[number]["key"];
+/** input은 탭 버튼 없이 세부내역의 '빠른 입력' 버튼으로만 진입 */
+export type BudgetTab = (typeof TABS)[number]["key"] | "input";
 
 export function BudgetTabs({ active }: { active: BudgetTab }) {
   const router = useRouter();

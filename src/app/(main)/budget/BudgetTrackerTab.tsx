@@ -2,10 +2,16 @@ import type { MonthSummary } from "@/lib/budget/monthData";
 import type { BudgetTracker, BudgetStatus } from "@/lib/budget/budgetTracker";
 import { CATEGORY_TOKENS, type BudgetCategory } from "@/lib/budget/categoryTokens";
 import { BudgetProgressBar, budgetBarColor } from "@/components/budget/BudgetProgressBar";
+import type { BudgetOverride } from "@/lib/budget/plans";
+import { NextMonthPlan } from "./NextMonthPlan";
 
 type Props = {
   tracker: BudgetTracker;
   summary: MonthSummary;
+  /** 다음달 예산 편성 아코디언 */
+  nextYearMonth: string;
+  nextOverrides: BudgetOverride[];
+  fixedTotal: number;
 };
 
 function won(n: number): string {
@@ -18,7 +24,7 @@ const STATUS_STYLE: Record<BudgetStatus, { chip: string; bar: string }> = {
   초과: { chip: "bg-rose-50 text-rose-600", bar: "#E11D48" },
 };
 
-export function BudgetTrackerTab({ tracker, summary }: Props) {
+export function BudgetTrackerTab({ tracker, summary, nextYearMonth, nextOverrides, fixedTotal }: Props) {
   const totalRatio =
     tracker.totalBudget > 0 ? tracker.totalSpent / tracker.totalBudget : 0;
   const pacePct =
@@ -98,6 +104,13 @@ export function BudgetTrackerTab({ tracker, summary }: Props) {
           </div>
         )}
       </div>
+
+      {/* 다음달 예산 편성 — 당월은 잠그고 다음 사이클만 조정 가능 */}
+      <NextMonthPlan
+        nextYearMonth={nextYearMonth}
+        overrides={nextOverrides}
+        fixedTotal={fixedTotal}
+      />
     </div>
   );
 }

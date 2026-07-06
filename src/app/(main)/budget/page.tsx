@@ -19,8 +19,9 @@ import {
   getSubscriptionExclusions,
 } from "@/lib/budget/subscriptions";
 import { buildBudgetTracker } from "@/lib/budget/budgetTracker";
-import { budgetMonthOf } from "@/lib/budget/cycle";
+import { budgetMonthOf, nextBudgetMonth } from "@/lib/budget/cycle";
 import { getFixedExpenses, fixedExpensesTotal } from "@/lib/budget/fixedExpenses";
+import { getBudgetOverrides, effectiveVariableTargets } from "@/lib/budget/plans";
 import { FixedTab } from "./FixedTab";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +55,9 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
   const needsMonthEntries = tab === "details";
   const needsBreakdown = tab === "summary" || tab === "tracker";
   const needsFixedItems = tab === "fixed" || tab === "tracker";
-  const [entries, summary, breakdown, recentForSubs, trend, fixedItems, exclusions] =
+  // 다음달 편성은 항상 "실제 현재 사이클"의 다음 달 (과거 달을 보고 있어도)
+  const nextYm = nextBudgetMonth(currentYearMonth());
+  const [entries, summary, breakdown, recentForSubs, trend, fixedItems, exclusions, overrides, nextOverrides] =
     await Promise.all([
       needsMonthEntries ? getMonthEntries(yearMonth) : Promise.resolve([]),
       getMonthSummary(yearMonth),
@@ -63,6 +66,8 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
       tab === "summary" ? getRecentCycleSpending(yearMonth) : Promise.resolve([]),
       needsFixedItems ? getFixedExpenses() : Promise.resolve([]),
       tab === "subs" ? getSubscriptionExclusions() : Promise.resolve(new Set<string>()),
+      tab === "tracker" ? getBudgetOverrides(yearMonth) : Promise.resolve([]),
+      tab === "tracker" ? getBudgetOverrides(nextYm) : Promise.resolve([]),
     ]);
 
   const subs =
@@ -75,7 +80,8 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
     tab === "tracker"
       ? buildBudgetTracker(
           Object.fromEntries(breakdown.map((b) => [b.category, b.amount])),
-          fixedExpensesTotal(fixedItems)
+          fixedExpensesTotal(fixedItems),
+          effectiveVariableTargets(overrides)
         )
       : null;
 
@@ -100,7 +106,13 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
         </Suspense>
       )}
       {tab === "tracker" && tracker && (
-        <BudgetTrackerTab tracker={tracker} summary={summary} />
+        <BudgetTrackerTab
+          tracker={tracker}
+          summary={summary}
+          nextYearMonth={nextYm}
+          nextOverrides={nextOverrides}
+          fixedTotal={fixedExpensesTotal(fixedItems)}
+        />
       )}
       {tab === "input" && (
         <Suspense fallback={null}>
