@@ -1,13 +1,14 @@
 import type { ParseFn } from "./types";
-import { parseAmount, parseDateMMDD } from "./utils";
+import { parseAmount, parseDateMMDD, parseUsdToKrw } from "./utils";
 
 export const parseHyundai: ParseFn = (text, smsDate) => {
   if (!text.includes("현대카드")) return null;
 
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   const amountMatch = text.match(/([\d,]+)원/);
+  const usdKrw = amountMatch ? null : parseUsdToKrw(text); // 해외승인(USD) → 고정환율 환산
   const dateMatch = text.match(/(\d{1,2}\/\d{1,2})\s+\d{2}:\d{2}/);
-  if (!amountMatch || !dateMatch) return null;
+  if ((!amountMatch && usdKrw == null) || !dateMatch) return null;
 
   let merchant: string;
 
@@ -24,7 +25,7 @@ export const parseHyundai: ParseFn = (text, smsDate) => {
   if (!merchant) return null;
 
   return {
-    amount: parseAmount(amountMatch[1]),
+    amount: amountMatch ? parseAmount(amountMatch[1]) : usdKrw!,
     merchant,
     date: parseDateMMDD(dateMatch[1], smsDate),
     payment_method: "현대카드",

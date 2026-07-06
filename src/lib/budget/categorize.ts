@@ -12,10 +12,11 @@ import type { BudgetCategory } from "./categoryTokens";
  * - "쿠팡이츠"(배달)는 온라인쇼핑("쿠팡")보다 먼저 → 외식으로.
  */
 export const CATEGORY_RULES: { category: BudgetCategory; keywords: string[] }[] = [
-  { category: "고정비", keywords: ["삼성화재", "보험", "헬스장 할부"] },
+  // anthropic/claude는 당분간 고정지출(Max 구독 $110)로 취급 — 구독·렌탈 예산(20만)이 못 담는 크기
+  { category: "고정비", keywords: ["삼성화재", "보험", "헬스장 할부", "anthropic", "claude"] },
   { category: "의료·건강", keywords: ["의원", "약국", "병원", "내과", "치과", "한의원", "건강의학", "정신건강"] },
   { category: "교통", keywords: ["택시", "티머니", "카카오t", "철도", "지하철", "버스", "모빌리티"] },
-  { category: "구독·렌탈", keywords: ["anthropic", "claude", "카페24", "구글페이먼트", "googleplay", "google", "netflix", "넷플릭스", "youtube", "유튜브", "apple", "애플", "spotify", "스포티파이"] },
+  { category: "구독·렌탈", keywords: ["카페24", "구글페이먼트", "googleplay", "google", "netflix", "넷플릭스", "youtube", "유튜브", "apple", "애플", "spotify", "스포티파이"] },
   { category: "외식", keywords: ["쿠팡이츠", "배달의민족", "배민", "요기요", "써브웨이", "subway", "곱창", "한우", "면옥", "국수", "김밥", "분식", "식당", "치킨", "라면", "스시", "초밥", "순대", "버거", "피자", "떡볶이", "횟집", "냠냠", "호로록"] },
   { category: "온라인쇼핑", keywords: ["쿠팡", "무신사", "크림", "kream", "11번가", "지마켓", "g마켓", "ssg", "옥션", "agoda", "아고다", "에이블리", "지그재그"] },
   { category: "카페", keywords: ["커피", "coffee", "메가", "mgc", "엠지씨", "스타벅스", "starbucks", "베이커리", "베이커스", "빵", "배스킨라빈스", "배스킨", "카페"] },

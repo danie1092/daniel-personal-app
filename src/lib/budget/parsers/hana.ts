@@ -1,14 +1,16 @@
 import type { ParseFn } from "./types";
-import { parseAmount, parseDateMMDD } from "./utils";
+import { parseAmount, parseDateMMDD, parseUsdToKrw } from "./utils";
 
 /**
  * 하나카드 SMS.
  *   하나3*0*체크승인 함*영 22,750원06/23 19:23 쿠팡(쿠페이)
  *   하나7*1*신용승인 함*영 12,000원06/23 19:23 스타벅스
  *   하나7*1*승인 함*영 35,570원 일시불 07/01 23:53 쿠팡(쿠페이) 누적6,957,283원  ← 간편결제(종류 미표기)
+ *   하나7*1*해외승인 함*영 USD89.53 07/06 14:56 ANTHROPIC* CLAUDE SU  ← 해외결제(고정환율 환산)
  *
- * 금액(…원)·날짜(MM/DD)·시각(HH:MM). 가맹점은 시각 뒤 나머지("누적…원" 꼬리는 제거).
- * 신용/체크: 문자에 '신용'/'체크'가 있으면 그대로, 없으면(간편결제 등) 마스킹 카드번호
+ * 금액(…원 또는 USD, 달러는 고정환율 환산)·날짜(MM/DD)·시각(HH:MM).
+ * 가맹점은 시각 뒤 나머지("누적…원" 꼬리는 제거).
+ * 신용/체크: 문자에 '신용'/'체크'가 있으면 그대로, 없으면(간편결제·해외 등) 마스킹 카드번호
  * 앞자리로 추론 — 7*1*=신용, 3*0*=체크 (다니 하나카드 규칙).
  */
 export const parseHana: ParseFn = (text, smsDate) => {
@@ -16,8 +18,9 @@ export const parseHana: ParseFn = (text, smsDate) => {
   if (!text.includes("승인")) return null;
 
   const amountMatch = text.match(/([\d,]+)원/);
+  const usdKrw = amountMatch ? null : parseUsdToKrw(text);
   const dateTimeMatch = text.match(/(\d{1,2}\/\d{1,2})\s+\d{1,2}:\d{2}/);
-  if (!amountMatch || !dateTimeMatch) return null;
+  if ((!amountMatch && usdKrw == null) || !dateTimeMatch) return null;
 
   const merchant = text
     .slice(text.indexOf(dateTimeMatch[0]) + dateTimeMatch[0].length)
@@ -36,7 +39,7 @@ export const parseHana: ParseFn = (text, smsDate) => {
   }
 
   return {
-    amount: parseAmount(amountMatch[1]),
+    amount: amountMatch ? parseAmount(amountMatch[1]) : usdKrw!,
     merchant,
     date: parseDateMMDD(dateTimeMatch[1], smsDate),
     payment_method: cardType ? `하나(${cardType})` : "하나카드",

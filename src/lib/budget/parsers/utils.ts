@@ -1,8 +1,22 @@
+import { USD_KRW_RATE } from "@/lib/constants";
+
 /** "13,200원" → 13200, 숫자 없으면 NaN */
 export function parseAmount(raw: string): number {
   const digits = raw.replace(/[^0-9]/g, "");
   if (digits.length === 0) return NaN;
   return parseInt(digits, 10);
+}
+
+/**
+ * 해외승인 달러 금액 → 원화 환산 (고정환율 USD_KRW_RATE, 반올림).
+ * "USD89.53" / "USD 1,234.56" 지원. 없으면 null.
+ */
+export function parseUsdToKrw(text: string): number | null {
+  const m = text.match(/USD\s*([\d,]+(?:\.\d+)?)/i);
+  if (!m) return null;
+  const usd = parseFloat(m[1].replace(/,/g, ""));
+  if (!Number.isFinite(usd) || usd <= 0) return null;
+  return Math.round(usd * USD_KRW_RATE);
 }
 
 /**

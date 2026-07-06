@@ -49,6 +49,12 @@ export const VARIABLE_BUDGET: number = TOTAL_BUDGET - (BUDGET_TARGETS.고정비 
  */
 export const BUDGET_RESET_DAY: number = 1;
 
+/**
+ * 달러 결제(클로드·유튜브 등) SMS 자동 환전용 고정 환율.
+ * 실제 청구 환율과 오차는 감수(사용자 결정, 2026-07-06 시세 ~1,543 기준 보수적으로 1,540).
+ */
+export const USD_KRW_RATE = 1540;
+
 export const PAYMENT_METHODS = [
   "현대카드",
   "우리카드",
@@ -87,10 +93,12 @@ export const FIXED_EXPENSES = [
   { description: "삼성화재", amount: r(219513), paymentMethod: "현대카드" },
   { description: "통신비",   amount: r(290151), paymentMethod: "현대카드" },
   { description: "구독",     amount: r(12663),  paymentMethod: "우리카드" },
+  // Claude Max $110 — 2026-07-06 환율 1,543원/$ 기준. 환율 오르면 갱신
+  { description: "클로드 구독", amount: r(169730), paymentMethod: "현대카드" },
   { description: "가스비",   amount: r(112920), paymentMethod: "우리카드" },
   { description: "전기료",   amount: r(29410),  paymentMethod: "현금" },
   { description: "수도",     amount: r(23910),  paymentMethod: "현금" },
   { description: "코웨이",   amount: r(94279),  paymentMethod: "우리카드" },
   { description: "관리비",   amount: r(40000),  paymentMethod: "현금" },
-  { description: "주담대",   amount: r(400000), paymentMethod: "현금" },
+  // 주담대는 지출이 아니라 별도 관리(자산 성격)라 고정비 목록에서 제외
 ] as const;

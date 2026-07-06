@@ -1,5 +1,5 @@
 import type { ParseFn } from "./types";
-import { parseAmount, parseDateMMDD } from "./utils";
+import { parseAmount, parseDateMMDD, parseUsdToKrw } from "./utils";
 
 /**
  * 우리카드 SMS. 두 포맷 지원:
@@ -16,8 +16,9 @@ export const parseWoori: ParseFn = (text, smsDate) => {
   if (!isWoori) return null;
 
   const amountMatch = text.match(/([\d,]+)\s*원/);
+  const usdKrw = amountMatch ? null : parseUsdToKrw(text); // 해외승인(USD) → 고정환율 환산
   const dateMatch = text.match(/(\d{1,2}\/\d{1,2})\s+\d{1,2}:\d{2}/);
-  if (!amountMatch || !dateMatch) return null;
+  if ((!amountMatch && usdKrw == null) || !dateMatch) return null;
 
   const merchant = text
     .split("\n")
@@ -29,13 +30,14 @@ export const parseWoori: ParseFn = (text, smsDate) => {
         !/승인/.test(l) &&
         !/님\s*$/.test(l) &&
         !/[\d,]+\s*원/.test(l) &&
+        !/USD\s*[\d,.]+/i.test(l) && // 해외승인 달러 금액 줄은 가맹점 아님
         !/누적/.test(l) &&
         !/\d{1,2}\/\d{1,2}/.test(l)
     );
   if (!merchant) return null;
 
   return {
-    amount: parseAmount(amountMatch[1]),
+    amount: amountMatch ? parseAmount(amountMatch[1]) : usdKrw!,
     merchant,
     date: parseDateMMDD(dateMatch[1], smsDate),
     payment_method: "우리카드",

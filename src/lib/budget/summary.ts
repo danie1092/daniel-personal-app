@@ -7,6 +7,8 @@ export type BudgetSummary = {
   /** 변동지출 예산 (고정비 제외 — 지출 합계와 같은 기준) */
   monthlyBudget: number;
   monthSpending: number;
+  /** 고정비 포함 이번 사이클 총지출 (정보성 — 페이스/코멘트 계산엔 안 씀) */
+  monthSpendingWithFixed: number;
   todaySpending: number;
   daysIntoMonth: number;
   daysInMonth: number;
@@ -47,7 +49,6 @@ export async function getBudgetSummary(): Promise<BudgetSummary> {
       .select("amount, date, category")
       .gte("date", mStart)
       .lte("date", todayStr)
-      .neq("category", "고정비")
       .eq("type", "expense"),
     supabase
       .from("budget_entries")
@@ -58,7 +59,10 @@ export async function getBudgetSummary(): Promise<BudgetSummary> {
       .eq("type", "expense"),
   ]);
 
-  const entries = (data ?? []) as { amount: number; date: string; category: string }[];
+  const all = (data ?? []) as { amount: number; date: string; category: string }[];
+  const monthSpendingWithFixed = all.reduce((sum, e) => sum + e.amount, 0);
+  // 페이스/오늘/무지출 등 행동 지표는 변동지출(고정비 제외)만으로 계산
+  const entries = all.filter((e) => e.category !== "고정비");
   const monthSpending = entries.reduce((sum, e) => sum + e.amount, 0);
   const todaySpending = entries
     .filter((e) => e.date === todayStr)
@@ -77,6 +81,7 @@ export async function getBudgetSummary(): Promise<BudgetSummary> {
   return {
     monthlyBudget: VARIABLE_BUDGET,
     monthSpending,
+    monthSpendingWithFixed,
     todaySpending,
     daysIntoMonth: daysIntoCycle,
     daysInMonth: daysInCycle,
