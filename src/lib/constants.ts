@@ -49,6 +49,12 @@ export const VARIABLE_BUDGET: number = TOTAL_BUDGET - (BUDGET_TARGETS.고정비 
  */
 export const BUDGET_RESET_DAY: number = 1;
 
+/**
+ * 달러 결제(클로드·유튜브 등) SMS 자동 환전용 고정 환율.
+ * 실제 청구 환율과 오차는 감수(사용자 결정, 2026-07-06 시세 ~1,543 기준 보수적으로 1,540).
+ */
+export const USD_KRW_RATE = 1540;
+
 export const PAYMENT_METHODS = [
   "현대카드",
   "우리카드",

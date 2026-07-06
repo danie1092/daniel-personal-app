@@ -56,6 +56,17 @@ describe("parseHana", () => {
     );
   });
 
+  test("해외승인(USD) — 고정환율 1,540원 환산 (실제 문자)", () => {
+    const text = `[Web발신]
+하나7*1*해외승인 함*영 USD89.53 07/06 14:56 ANTHROPIC* CLAUDE SU`;
+    expect(parseHana(text, new Date("2026-07-06T14:56:00+09:00"))).toEqual({
+      amount: 137876, // 89.53 × 1540 = 137,876.2 → 반올림
+      merchant: "ANTHROPIC* CLAUDE SU",
+      date: "2026-07-06",
+      payment_method: "하나(신용)", // 7*1* → 신용 추론
+    });
+  });
+
   test("하나카드 아님 → null", () => {
     expect(parseHana("[일시불.승인(0157)]04/06 23:15\n5,080원\n쿠팡", SMS_DATE)).toBeNull();
   });
