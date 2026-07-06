@@ -1,5 +1,10 @@
 import { Suspense } from "react";
-import { getMonthEntries, getMonthSummary, getCategoryBreakdown } from "@/lib/budget/monthData";
+import {
+  getMonthEntries,
+  getMonthSummary,
+  getCategoryBreakdown,
+  getRecentCycleSpending,
+} from "@/lib/budget/monthData";
 import { BudgetMonthSelector } from "./BudgetMonthSelector";
 import { BudgetTabs, type BudgetTab } from "./BudgetTabs";
 import { DetailsTab } from "./DetailsTab";
@@ -44,11 +49,12 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
 
   const needsMonthEntries = tab === "details";
   const needsBreakdown = tab === "summary" || tab === "tracker";
-  const [entries, summary, breakdown, recentForSubs] = await Promise.all([
+  const [entries, summary, breakdown, recentForSubs, trend] = await Promise.all([
     needsMonthEntries ? getMonthEntries(yearMonth) : Promise.resolve([]),
     getMonthSummary(yearMonth),
     needsBreakdown ? getCategoryBreakdown(yearMonth) : Promise.resolve([]),
     tab === "subs" ? getRecentEntries(4) : Promise.resolve([]),
+    tab === "summary" ? getRecentCycleSpending(yearMonth) : Promise.resolve([]),
   ]);
 
   const subs = tab === "subs" ? detectSubscriptions(recentForSubs) : [];
@@ -88,7 +94,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
         </Suspense>
       )}
       {tab === "summary" && (
-        <SummaryTab summary={summary} breakdown={breakdown} />
+        <SummaryTab summary={summary} breakdown={breakdown} trend={trend} />
       )}
       {tab === "subs" && (
         <SubscriptionsTab subs={subs} monthlyTotal={subsTotal} summary={summary} />

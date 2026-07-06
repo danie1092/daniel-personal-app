@@ -21,6 +21,12 @@ export function budgetMonthOf(d: Date): string {
   return `${py}-${pad(pm)}`;
 }
 
+/** 바로 이전 사이클 라벨(YYYY-MM). 연 롤오버 포함. */
+export function prevBudgetMonth(yearMonth: string): string {
+  const [y, m] = yearMonth.split("-").map(Number);
+  return m === 1 ? `${y - 1}-12` : `${y}-${pad(m - 1)}`;
+}
+
 /** 사이클 라벨(YYYY-MM)의 [시작, 끝] 날짜(YYYY-MM-DD, 양끝 포함). */
 export function budgetMonthRange(yearMonth: string): { start: string; end: string } {
   const [y, m] = yearMonth.split("-").map(Number);

@@ -7,14 +7,21 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import { getBudgetSummary } from "./summary";
 import { cycleDays, budgetMonthOf } from "./cycle";
+import { VARIABLE_BUDGET } from "@/lib/constants";
 
 function makeChain(data: unknown) {
   const chain: Record<string, unknown> = {};
   chain.select = vi.fn(() => chain);
   chain.gte = vi.fn(() => chain);
   chain.lte = vi.fn(() => chain);
-  chain.neq = vi.fn(() => Promise.resolve({ data, error: null }));
+  chain.neq = vi.fn(() => chain);
+  chain.eq = vi.fn(() => Promise.resolve({ data, error: null }));
   return chain;
+}
+
+/** 쿼리 2개(이번 사이클, 지난 사이클 같은 시점) 순서대로 mock */
+function mockQueries(current: unknown, prev: unknown) {
+  fromMock.mockReturnValueOnce(makeChain(current)).mockReturnValueOnce(makeChain(prev));
 }
 
 describe("getBudgetSummary", () => {
@@ -25,33 +32,58 @@ describe("getBudgetSummary", () => {
     vi.setSystemTime(new Date(2026, 3, 26, 12, 0, 0));
   });
 
-  test("월/주/오늘 지출이 누적된다", async () => {
-    fromMock.mockReturnValueOnce(makeChain([
-      { amount: 12000, date: "2026-04-26" },  // 오늘 (일요일, 이번 주 시작)
-      { amount: 6500, date: "2026-04-26" },   // 오늘
-      { amount: 14000, date: "2026-04-25" },  // 어제 (지난 주 — Sunday-start 기준)
-      { amount: 50000, date: "2026-04-20" },  // 4월, 지난 주
-    ]));
+  test("월/오늘 지출 누적 + 미분류 건수", async () => {
+    mockQueries(
+      [
+        { amount: 12000, date: "2026-04-26", category: "외식" },
+        { amount: 6500, date: "2026-04-26", category: "미분류" },
+        { amount: 14000, date: "2026-04-25", category: "카페" },
+        { amount: 50000, date: "2026-04-20", category: "미분류" },
+      ],
+      []
+    );
 
     const result = await getBudgetSummary();
-    expect(result.todaySpending).toBe(18500);  // 오늘 2건
-    expect(result.weekSpending).toBe(18500);    // 4/26(일) 시작 주, 오늘만 포함
-    expect(result.monthSpending).toBe(82500);   // 4월 전체
-    // 리셋일 설정 무관하게 cycle 헬퍼에서 파생 검증
+    expect(result.todaySpending).toBe(18500);
+    expect(result.monthSpending).toBe(82500);
+    expect(result.uncategorizedCount).toBe(2);
     expect(result.daysIntoMonth).toBe(cycleDays(budgetMonthOf(new Date()), new Date()).daysIntoCycle);
   });
 
-  test("데이터가 비어도 0으로 반환", async () => {
-    fromMock.mockReturnValueOnce(makeChain([]));
+  test("무지출 일수/스트릭 — 지출일 3일이면 나머지가 무지출", async () => {
+    mockQueries(
+      [
+        { amount: 12000, date: "2026-04-24", category: "외식" },
+        { amount: 6500, date: "2026-04-20", category: "카페" },
+      ],
+      []
+    );
     const result = await getBudgetSummary();
-    expect(result.todaySpending).toBe(0);
-    expect(result.weekSpending).toBe(0);
-    expect(result.monthSpending).toBe(0);
+    const { daysIntoCycle } = cycleDays(budgetMonthOf(new Date()), new Date());
+    expect(result.noSpendDays).toBe(daysIntoCycle - 2);
+    expect(result.noSpendStreak).toBe(2); // 4/25, 4/26
   });
 
-  test("monthlyBudget은 카테고리 예산 합(1,958,000) 반환", async () => {
-    fromMock.mockReturnValueOnce(makeChain([]));
+  test("지난 사이클 데이터 있으면 같은 시점까지 합계, 없으면 null", async () => {
+    mockQueries([], [{ amount: 30000 }, { amount: 20000 }]);
+    expect((await getBudgetSummary()).prevSpendingSamePoint).toBe(50000);
+
+    mockQueries([], []);
+    expect((await getBudgetSummary()).prevSpendingSamePoint).toBeNull();
+  });
+
+  test("데이터가 비어도 0으로 반환", async () => {
+    mockQueries([], []);
     const result = await getBudgetSummary();
-    expect(result.monthlyBudget).toBe(1_958_000);
+    expect(result.todaySpending).toBe(0);
+    expect(result.monthSpending).toBe(0);
+    expect(result.uncategorizedCount).toBe(0);
+  });
+
+  test("monthlyBudget은 변동예산(고정비 제외) 반환", async () => {
+    mockQueries([], []);
+    const result = await getBudgetSummary();
+    expect(result.monthlyBudget).toBe(VARIABLE_BUDGET);
+    expect(result.monthlyBudget).toBe(1_278_000);
   });
 });

@@ -35,6 +35,13 @@ export const TOTAL_BUDGET = Object.values(BUDGET_TARGETS).reduce(
 ) as number;
 
 /**
+ * 변동지출 예산 = 총예산 - 고정비 타깃 (1,278,000).
+ * 홈/세부내역의 지출 합계는 고정비를 제외하므로, "예산의 몇 %" 분모도 이걸 써야 정합.
+ * (고정비 포함 기준으로 보는 곳 — 트래커/구독 탭 — 은 TOTAL_BUDGET 유지.)
+ */
+export const VARIABLE_BUDGET: number = TOTAL_BUDGET - (BUDGET_TARGETS.고정비 ?? 0);
+
+/**
  * 가계부 사이클 리셋일. "한 달" = 매월 이 날 ~ 다음달 (이 날-1).
  * 1 = 달력월(1일~말일). 개인 지출 예산엔 달력월이 맞음(예산 타깃·고정비·직관 일치).
  * 사업이익 정산일 같은 회계 이벤트는 "쓸 돈 리셋"이 아니므로 여기 맞추지 않음.

@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { budgetMonthOf, budgetMonthRange, cycleDays } from "./cycle";
+import { budgetMonthOf, budgetMonthRange, cycleDays, prevBudgetMonth } from "./cycle";
 import { BUDGET_RESET_DAY as R } from "@/lib/constants";
 
 // 리셋일 값(R)에 무관하게 성립하는 불변식 위주 — 상수 바꿔도 안 깨짐.
@@ -16,6 +16,14 @@ describe("budgetMonthOf", () => {
       expect(budgetMonthOf(new Date(2026, 5, 1))).toBe("2026-06");
       expect(budgetMonthOf(new Date(2026, 0, 1))).toBe("2026-01");
     }
+  });
+});
+
+describe("prevBudgetMonth", () => {
+  test("한 달 전 라벨, 연 롤오버 포함", () => {
+    expect(prevBudgetMonth("2026-06")).toBe("2026-05");
+    expect(prevBudgetMonth("2026-01")).toBe("2025-12");
+    expect(prevBudgetMonth("2026-10")).toBe("2026-09");
   });
 });
 

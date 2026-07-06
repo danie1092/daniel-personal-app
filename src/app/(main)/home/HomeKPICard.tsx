@@ -1,34 +1,50 @@
 import Link from "next/link";
 import type { BudgetSummary } from "@/lib/budget/summary";
-
-function getSpendingComment(amount: number, budget: number): string {
-  if (amount === 0) return "무지출 챌린지!";
-  const pct = amount / budget;
-  if (pct <= 0.3) return "이번달도 아껴쓰자!";
-  if (pct <= 0.6) return "슬슬 조심해야겠는걸";
-  if (pct <= 0.85) return "좀만 더 아끼자...!";
-  if (pct <= 1.0) return "미쳤냐?";
-  return "거지가 되고싶냐?";
-}
+import { paceComment, projectEndOfCycle } from "@/lib/budget/insights";
+import { BudgetProgressBar } from "@/components/budget/BudgetProgressBar";
 
 export function HomeKPICard({
   monthlyBudget,
   monthSpending,
-  weekSpending,
   todaySpending,
   daysIntoMonth,
+  daysInMonth,
+  prevSpendingSamePoint,
+  noSpendDays,
+  noSpendStreak,
+  uncategorizedCount,
 }: BudgetSummary) {
-  const pct = Math.min(monthSpending / monthlyBudget, 1);
-  const dailyAvg = daysIntoMonth > 0 ? Math.round(monthSpending / daysIntoMonth) : 0;
-  const comment = getSpendingComment(monthSpending, monthlyBudget);
+  const ratio = monthlyBudget > 0 ? monthSpending / monthlyBudget : 0;
+  const pace = daysInMonth > 0 ? daysIntoMonth / daysInMonth : 0;
+  const comment = paceComment(monthSpending, monthlyBudget, pace);
+
+  const remaining = monthlyBudget - monthSpending;
+  const daysLeft = Math.max(daysInMonth - daysIntoMonth + 1, 1);
+  // 오늘 쓸 수 있는 돈: 남은 예산을 남은 일수(오늘 포함)로 나눔. 100원 단위 내림
+  const dailyAllowance = Math.max(Math.floor(remaining / daysLeft / 100) * 100, 0);
+
+  const projected = projectEndOfCycle(monthSpending, daysIntoMonth, daysInMonth);
+  const projectedRatio = monthlyBudget > 0 ? projected / monthlyBudget : 0;
+  // 초반 며칠은 일평균이 널뛰므로 예상치 숨김
+  const showProjection = daysIntoMonth >= 3 && monthSpending > 0;
+
+  const prevDiff =
+    prevSpendingSamePoint != null ? monthSpending - prevSpendingSamePoint : null;
 
   return (
     <Link
       href="/budget"
       className="block bg-surface rounded-card p-4 mb-3 border border-hair shadow-card active:opacity-80"
     >
-      <div className="text-[10px] font-extrabold tracking-wider text-ink-sub uppercase mb-1.5">
-        이번달 지출
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="text-[10px] font-extrabold tracking-wider text-ink-sub uppercase">
+          이번달 지출
+        </div>
+        {uncategorizedCount > 0 && (
+          <span className="px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold">
+            미분류 {uncategorizedCount}건
+          </span>
+        )}
       </div>
       <div className="text-[28px] font-extrabold tracking-tight leading-tight">
         {monthSpending.toLocaleString()}원
@@ -36,27 +52,65 @@ export function HomeKPICard({
       <div className="text-[12px] text-ink-muted">
         / 예산 {monthlyBudget.toLocaleString()}원
       </div>
-      <div className="h-2 bg-hair-light rounded-full mt-3 mb-1.5 overflow-hidden">
-        <div
-          className="h-full bg-primary rounded-full transition-all"
-          style={{ width: `${pct * 100}%` }}
-        />
+
+      <div className="mt-3 mb-1.5">
+        <BudgetProgressBar ratio={ratio} pace={pace} />
       </div>
       <div className="text-[12px] text-ink-sub">
-        {comment} · {Math.round(pct * 100)}%
+        {comment} · 예산의 {Math.round(ratio * 100)}% · 한 달 {Math.round(pace * 100)}% 지남
       </div>
+
+      <div className="mt-2 flex flex-col gap-0.5 text-[12px]">
+        {showProjection && (
+          <div
+            className={projectedRatio > 1 ? "text-danger font-semibold" : "text-ink-muted"}
+          >
+            이 페이스면 월말 ~{projected.toLocaleString()}원 · 예산의{" "}
+            {Math.round(projectedRatio * 100)}%
+          </div>
+        )}
+        {prevDiff != null && (
+          <div
+            className={prevDiff <= 0 ? "text-success font-semibold" : "text-danger font-semibold"}
+          >
+            지난달 이맘때보다 {Math.abs(prevDiff).toLocaleString()}원{" "}
+            {prevDiff <= 0 ? "덜 쓰는 중" : "더 쓰는 중"}
+          </div>
+        )}
+        {noSpendDays > 0 && (
+          <div className="text-ink-muted">
+            무지출 {noSpendDays}일
+            {noSpendStreak >= 2 && <> · 연속 {noSpendStreak}일 🔥</>}
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-3 gap-2 mt-3.5 pt-3.5 border-t border-hair-light">
         <div className="text-center">
-          <div className="text-[10px] text-ink-muted mb-1">오늘</div>
-          <div className="text-[14px] font-bold">{todaySpending.toLocaleString()}</div>
+          <div className="text-[10px] text-ink-muted mb-1">오늘 지출</div>
+          <div
+            className={
+              todaySpending > dailyAllowance && todaySpending > 0
+                ? "text-[14px] font-bold text-danger"
+                : "text-[14px] font-bold"
+            }
+          >
+            {todaySpending.toLocaleString()}
+          </div>
         </div>
         <div className="text-center">
-          <div className="text-[10px] text-ink-muted mb-1">이번 주</div>
-          <div className="text-[14px] font-bold">{weekSpending.toLocaleString()}</div>
+          <div className="text-[10px] text-ink-muted mb-1">하루 가능</div>
+          <div className="text-[14px] font-bold text-primary">
+            {dailyAllowance.toLocaleString()}
+          </div>
         </div>
         <div className="text-center">
-          <div className="text-[10px] text-ink-muted mb-1">일평균</div>
-          <div className="text-[14px] font-bold">{dailyAvg.toLocaleString()}</div>
+          <div className="text-[10px] text-ink-muted mb-1">남은 예산</div>
+          <div
+            className={remaining < 0 ? "text-[14px] font-bold text-danger" : "text-[14px] font-bold"}
+          >
+            {remaining.toLocaleString()}
+          </div>
         </div>
       </div>
     </Link>
