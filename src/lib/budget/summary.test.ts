@@ -32,22 +32,37 @@ describe("getBudgetSummary", () => {
     vi.setSystemTime(new Date(2026, 3, 26, 12, 0, 0));
   });
 
-  test("월/오늘 지출 누적 + 미분류 건수", async () => {
+  test("월/오늘 지출 누적 + 미분류 건수 — 고정비는 변동지출에서 제외, 총지출엔 포함", async () => {
     mockQueries(
       [
         { amount: 12000, date: "2026-04-26", category: "외식" },
         { amount: 6500, date: "2026-04-26", category: "미분류" },
         { amount: 14000, date: "2026-04-25", category: "카페" },
         { amount: 50000, date: "2026-04-20", category: "미분류" },
+        { amount: 290000, date: "2026-04-15", category: "고정비" },
       ],
       []
     );
 
     const result = await getBudgetSummary();
     expect(result.todaySpending).toBe(18500);
-    expect(result.monthSpending).toBe(82500);
+    expect(result.monthSpending).toBe(82500); // 고정비 제외
+    expect(result.monthSpendingWithFixed).toBe(372500); // 고정비 포함
     expect(result.uncategorizedCount).toBe(2);
     expect(result.daysIntoMonth).toBe(cycleDays(budgetMonthOf(new Date()), new Date()).daysIntoCycle);
+  });
+
+  test("고정비만 있는 날은 무지출로 친다 (행동 지표는 변동지출 기준)", async () => {
+    mockQueries(
+      [
+        { amount: 12000, date: "2026-04-24", category: "외식" },
+        { amount: 290000, date: "2026-04-26", category: "고정비" },
+      ],
+      []
+    );
+    const result = await getBudgetSummary();
+    // 4/25, 4/26 모두 변동지출 없음 → 스트릭 2
+    expect(result.noSpendStreak).toBe(2);
   });
 
   test("무지출 일수/스트릭 — 지출일 3일이면 나머지가 무지출", async () => {

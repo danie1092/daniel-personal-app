@@ -92,5 +92,5 @@ export const FIXED_EXPENSES = [
   { description: "수도",     amount: r(23910),  paymentMethod: "현금" },
   { description: "코웨이",   amount: r(94279),  paymentMethod: "우리카드" },
   { description: "관리비",   amount: r(40000),  paymentMethod: "현금" },
-  { description: "주담대",   amount: r(400000), paymentMethod: "현금" },
+  // 주담대는 지출이 아니라 별도 관리(자산 성격)라 고정비 목록에서 제외
 ] as const;

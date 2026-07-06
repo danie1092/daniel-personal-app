@@ -6,6 +6,7 @@ import { BudgetProgressBar } from "@/components/budget/BudgetProgressBar";
 export function HomeKPICard({
   monthlyBudget,
   monthSpending,
+  monthSpendingWithFixed,
   todaySpending,
   daysIntoMonth,
   daysInMonth,
@@ -51,6 +52,9 @@ export function HomeKPICard({
       </div>
       <div className="text-[12px] text-ink-muted">
         / 예산 {monthlyBudget.toLocaleString()}원
+        {monthSpendingWithFixed > monthSpending && (
+          <> · 고정비 포함 총 {monthSpendingWithFixed.toLocaleString()}원</>
+        )}
       </div>
 
       <div className="mt-3 mb-1.5">
