@@ -99,6 +99,6 @@ describe("getBudgetSummary", () => {
     mockQueries([], []);
     const result = await getBudgetSummary();
     expect(result.monthlyBudget).toBe(VARIABLE_BUDGET);
-    expect(result.monthlyBudget).toBe(1_278_000);
+    expect(result.monthlyBudget).toBe(1_178_000);
   });
 });
