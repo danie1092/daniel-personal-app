@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { TOTAL_BUDGET } from "@/lib/constants";
+import { TOTAL_BUDGET, VARIABLE_BUDGET } from "@/lib/constants";
 import type { BudgetCategory } from "./categoryTokens";
-import { budgetMonthRange, cycleDays } from "./cycle";
+import { budgetMonthRange, cycleDays, prevBudgetMonth } from "./cycle";
 
 const MONTHLY_BUDGET = TOTAL_BUDGET;
 
@@ -19,7 +19,10 @@ export type BudgetEntry = {
 
 export type MonthSummary = {
   yearMonth: string;
+  /** 총예산 (고정비 포함) — spendingWithFixed 와 같은 기준 */
   monthlyBudget: number;
+  /** 변동지출 예산 (고정비 제외) — spending 과 같은 기준 */
+  variableBudget: number;
   spending: number;
   spendingWithFixed: number;
   income: number;
@@ -76,6 +79,7 @@ export async function getMonthSummary(yearMonth: string): Promise<MonthSummary> 
   return {
     yearMonth,
     monthlyBudget: MONTHLY_BUDGET,
+    variableBudget: VARIABLE_BUDGET,
     spending,
     spendingWithFixed,
     income,
@@ -84,6 +88,39 @@ export async function getMonthSummary(yearMonth: string): Promise<MonthSummary> 
     daysInMonth: daysInCycle,
     daysIntoMonth: daysIntoCycle,
   };
+}
+
+export type CycleSpending = {
+  yearMonth: string;
+  /** 변동지출 합 (고정비 제외 — 홈/세부내역 기준과 동일) */
+  spending: number;
+};
+
+/** 최근 N개 사이클(endYearMonth 포함, 과거→현재 순)의 변동지출 합. 요약 탭 추이 차트용. */
+export async function getRecentCycleSpending(
+  endYearMonth: string,
+  count = 6
+): Promise<CycleSpending[]> {
+  const cycles: string[] = [endYearMonth];
+  while (cycles.length < count) cycles.unshift(prevBudgetMonth(cycles[0]));
+  const ranges = cycles.map((ym) => ({ ym, ...budgetMonthRange(ym) }));
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("budget_entries")
+    .select("amount, date")
+    .gte("date", ranges[0].start)
+    .lte("date", ranges[ranges.length - 1].end)
+    .neq("category", "고정비")
+    .eq("type", "expense");
+
+  const entries = (data ?? []) as { amount: number; date: string }[];
+  return ranges.map(({ ym, start, end }) => ({
+    yearMonth: ym,
+    spending: entries
+      .filter((e) => e.date >= start && e.date <= end)
+      .reduce((s, e) => s + e.amount, 0),
+  }));
 }
 
 export async function getCategoryBreakdown(yearMonth: string): Promise<CategoryBreakdown[]> {

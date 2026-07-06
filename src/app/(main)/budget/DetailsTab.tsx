@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { BudgetEntry, MonthSummary } from "@/lib/budget/monthData";
+import { paceComment } from "@/lib/budget/insights";
+import { BudgetProgressBar } from "@/components/budget/BudgetProgressBar";
 import { DetailsFilter } from "./DetailsFilter";
 import { EntryRow } from "./EntryRow";
 
@@ -20,16 +22,6 @@ function formatDayHeader(dateStr: string, today: string): string {
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   return `${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEKDAYS[d.getDay()]}요일`;
-}
-
-function getSpendingComment(amount: number, budget: number): string {
-  if (amount === 0) return "무지출 챌린지!";
-  const pct = amount / budget;
-  if (pct <= 0.3) return "이번달도 아껴쓰자!";
-  if (pct <= 0.6) return "슬슬 조심해야겠는걸";
-  if (pct <= 0.85) return "좀만 더 아끼자...!";
-  if (pct <= 1.0) return "미쳤냐?";
-  return "거지가 되고싶냐?";
 }
 
 type Props = {
@@ -50,9 +42,9 @@ export function DetailsTab({ entries, summary, todayStr }: Props) {
     groups.get(e.date)!.push(e);
   }
 
-  const pct = Math.min(summary.spending / summary.monthlyBudget, 1);
-  const comment = getSpendingComment(summary.spending, summary.monthlyBudget);
-  const overBudget = pct >= 0.85;
+  const ratio = summary.variableBudget > 0 ? summary.spending / summary.variableBudget : 0;
+  const pace = summary.daysInMonth > 0 ? summary.daysIntoMonth / summary.daysInMonth : 0;
+  const comment = paceComment(summary.spending, summary.variableBudget, pace);
 
   return (
     <div>
@@ -64,16 +56,13 @@ export function DetailsTab({ entries, summary, todayStr }: Props) {
           {summary.spending.toLocaleString()}원
         </div>
         <div className="text-[12px] text-ink-muted mt-1">
-          / 예산 {summary.monthlyBudget.toLocaleString()}원
+          / 예산 {summary.variableBudget.toLocaleString()}원
         </div>
-        <div className="h-2 bg-hair-light rounded-full mt-3 overflow-hidden">
-          <div
-            className={overBudget ? "h-full bg-warning rounded-full" : "h-full bg-primary rounded-full"}
-            style={{ width: `${pct * 100}%` }}
-          />
+        <div className="mt-3">
+          <BudgetProgressBar ratio={ratio} pace={pace} />
         </div>
         <div className="text-[12px] text-ink-sub mt-1.5">
-          예산의 {Math.round(pct * 100)}% 사용 · {comment}
+          예산의 {Math.round(ratio * 100)}% · 한 달 {Math.round(pace * 100)}% 지남 · {comment}
         </div>
 
         <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-hair-light">

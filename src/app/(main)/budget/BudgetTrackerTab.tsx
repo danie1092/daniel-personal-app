@@ -1,6 +1,7 @@
 import type { MonthSummary } from "@/lib/budget/monthData";
 import type { BudgetTracker, BudgetStatus } from "@/lib/budget/budgetTracker";
 import { CATEGORY_TOKENS, type BudgetCategory } from "@/lib/budget/categoryTokens";
+import { BudgetProgressBar, budgetBarColor } from "@/components/budget/BudgetProgressBar";
 
 type Props = {
   tracker: BudgetTracker;
@@ -20,10 +21,9 @@ const STATUS_STYLE: Record<BudgetStatus, { chip: string; bar: string }> = {
 export function BudgetTrackerTab({ tracker, summary }: Props) {
   const totalRatio =
     tracker.totalBudget > 0 ? tracker.totalSpent / tracker.totalBudget : 0;
-  const totalColor =
-    totalRatio >= 1 ? "#E11D48" : totalRatio >= 0.85 ? "#EA580C" : "#0891B2";
   const pacePct =
     summary.daysInMonth > 0 ? summary.daysIntoMonth / summary.daysInMonth : 0;
+  const totalColor = budgetBarColor(totalRatio, pacePct);
 
   return (
     <div className="px-4 py-3">
@@ -41,16 +41,7 @@ export function BudgetTrackerTab({ tracker, summary }: Props) {
           </span>
           <span className="text-[12px] text-ink-muted">/ {won(tracker.totalBudget)}</span>
         </div>
-        <div className="relative h-2 bg-hair-light rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full"
-            style={{ width: `${Math.min(totalRatio * 100, 100)}%`, backgroundColor: totalColor }}
-          />
-          <div
-            className="absolute top-0 h-full w-px bg-ink/40"
-            style={{ left: `${Math.min(pacePct * 100, 100)}%` }}
-          />
-        </div>
+        <BudgetProgressBar ratio={totalRatio} pace={pacePct} />
         <div className="mt-1.5 flex justify-between text-[11px] text-ink-muted">
           <span>예산의 {Math.round(totalRatio * 100)}% · 한 달 {Math.round(pacePct * 100)}% 지남</span>
           <span className={tracker.totalRemaining < 0 ? "text-rose-600 font-bold" : ""}>

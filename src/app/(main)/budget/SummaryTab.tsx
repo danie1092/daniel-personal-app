@@ -1,4 +1,4 @@
-import type { MonthSummary, CategoryBreakdown } from "@/lib/budget/monthData";
+import type { MonthSummary, CategoryBreakdown, CycleSpending } from "@/lib/budget/monthData";
 import { CATEGORY_TOKENS, type BudgetCategory } from "@/lib/budget/categoryTokens";
 import { DonutChart } from "./DonutChart";
 import { FixedExpenseButton } from "./FixedExpenseButton";
@@ -6,9 +6,57 @@ import { FixedExpenseButton } from "./FixedExpenseButton";
 type Props = {
   summary: MonthSummary;
   breakdown: CategoryBreakdown[];
+  trend: CycleSpending[];
 };
 
-export function SummaryTab({ summary, breakdown }: Props) {
+function TrendChart({ trend, variableBudget }: { trend: CycleSpending[]; variableBudget: number }) {
+  const max = Math.max(...trend.map((t) => t.spending), variableBudget, 1);
+  return (
+    <div className="bg-surface rounded-card p-4 mb-3 border border-hair shadow-card">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[14px] font-bold">월별 지출 추이</div>
+        <div className="text-[10px] text-ink-muted">─ 예산선</div>
+      </div>
+      <div className="relative">
+        {/* 예산선 */}
+        <div
+          className="absolute left-0 right-0 border-t border-dashed border-ink-muted/50"
+          style={{ bottom: `${(variableBudget / max) * 72 + 26}px` }}
+        />
+        <div className="flex items-end justify-between gap-2">
+          {trend.map((t, i) => {
+            const current = i === trend.length - 1;
+            const h = Math.max((t.spending / max) * 72, t.spending > 0 ? 3 : 1);
+            const over = t.spending > variableBudget;
+            return (
+              <div key={t.yearMonth} className="flex-1 flex flex-col items-center gap-1">
+                <div className="text-[9px] text-ink-muted">
+                  {t.spending > 0 ? `${Math.round(t.spending / 10_000)}만` : "-"}
+                </div>
+                <div
+                  className="w-full max-w-[28px] rounded-t-[4px]"
+                  style={{
+                    height: `${h}px`,
+                    backgroundColor: over
+                      ? "var(--color-danger)"
+                      : current
+                        ? "var(--color-primary)"
+                        : "var(--color-hair)",
+                  }}
+                />
+                <div className={current ? "text-[10px] font-bold" : "text-[10px] text-ink-muted"}>
+                  {Number(t.yearMonth.split("-")[1])}월
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function SummaryTab({ summary, breakdown, trend }: Props) {
   const maxAmount = breakdown[0]?.amount ?? 0;
 
   return (
@@ -19,6 +67,8 @@ export function SummaryTab({ summary, breakdown }: Props) {
         </div>
         <DonutChart data={breakdown} />
       </div>
+
+      {trend.length > 1 && <TrendChart trend={trend} variableBudget={summary.variableBudget} />}
 
       <div className="bg-surface rounded-card p-4 mb-3 border border-hair shadow-card">
         <div className="text-[14px] font-bold mb-3">카테고리별 분포</div>

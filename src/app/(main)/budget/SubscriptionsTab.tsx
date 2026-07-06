@@ -1,6 +1,7 @@
 import type { MonthSummary } from "@/lib/budget/monthData";
 import type { Subscription } from "@/lib/budget/subscriptions";
 import { CATEGORY_TOKENS, type BudgetCategory } from "@/lib/budget/categoryTokens";
+import { BudgetProgressBar, budgetBarColor } from "@/components/budget/BudgetProgressBar";
 
 type Props = {
   subs: Subscription[];
@@ -17,7 +18,7 @@ export function SubscriptionsTab({ subs, monthlyTotal, summary }: Props) {
   const spent = summary.spendingWithFixed;
   const pct = summary.monthlyBudget > 0 ? spent / summary.monthlyBudget : 0;
   const pacePct = summary.daysInMonth > 0 ? summary.daysIntoMonth / summary.daysInMonth : 0;
-  const barColor = pct >= 1 ? "#E11D48" : pct >= 0.85 ? "#EA580C" : "#0891B2";
+  const barColor = budgetBarColor(pct, pacePct);
 
   return (
     <div className="px-4 py-3">
@@ -35,17 +36,8 @@ export function SubscriptionsTab({ subs, monthlyTotal, summary }: Props) {
           </span>
           <span className="text-[12px] text-ink-muted">/ {won(summary.monthlyBudget)}</span>
         </div>
-        <div className="relative h-2 bg-hair-light rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all"
-            style={{ width: `${Math.min(pct * 100, 100)}%`, backgroundColor: barColor }}
-          />
-          {/* 오늘 페이스 표시(이 위치보다 막대가 길면 평소보다 빠른 지출) */}
-          <div
-            className="absolute top-0 h-full w-px bg-ink/40"
-            style={{ left: `${Math.min(pacePct * 100, 100)}%` }}
-          />
-        </div>
+        {/* 오늘 페이스 마커: 이 위치보다 막대가 길면 평소보다 빠른 지출 */}
+        <BudgetProgressBar ratio={pct} pace={pacePct} />
         <div className="mt-1.5 text-[11px] text-ink-muted">
           예산의 {Math.round(pct * 100)}% · 한 달 {Math.round(pacePct * 100)}% 지남
         </div>
