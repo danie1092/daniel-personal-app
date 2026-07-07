@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { toKST } from "@/lib/kst";
 import { createClient } from "@supabase/supabase-js";
 import { requireBearer } from "@/lib/auth/requireBearer";
 import { checkBudgetSmsLimit } from "@/lib/rateLimit/upstash";
@@ -43,7 +44,8 @@ export async function POST(req: NextRequest) {
   }
 
   // 4. SMS 날짜 (poll.sh가 보내준 게 있으면 사용, 없으면 현재 시각)
-  const smsDate = smsDateMs ? new Date(smsDateMs) : new Date();
+  // 서버(UTC)에서도 SMS 날짜를 한국 기준으로 해석
+  const smsDate = toKST(smsDateMs ? new Date(smsDateMs) : new Date());
 
   // 5. 카드 파서
   const parsed = parse(raw_text, smsDate);

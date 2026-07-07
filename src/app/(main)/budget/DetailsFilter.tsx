@@ -2,14 +2,22 @@
 
 import { BUDGET_CATEGORIES } from "@/lib/constants";
 
-const FILTERED_CATEGORIES = BUDGET_CATEGORIES.filter((c) => c !== "월급" && c !== "저축");
+const BASE_CATEGORIES = BUDGET_CATEGORIES.filter((c) => c !== "월급" && c !== "저축");
 
 type Props = {
   active: string | null;
   onChange: (cat: string | null) => void;
+  /** 정규 전환된 커스텀 카테고리 — '기타' 뒤, 미분류 앞에 끼움 */
+  extraCategories?: string[];
 };
 
-export function DetailsFilter({ active, onChange }: Props) {
+export function DetailsFilter({ active, onChange, extraCategories = [] }: Props) {
+  const idx = BASE_CATEGORIES.indexOf("기타") + 1;
+  const categories: string[] = [
+    ...BASE_CATEGORIES.slice(0, idx),
+    ...extraCategories,
+    ...BASE_CATEGORIES.slice(idx),
+  ];
   return (
     <div className="flex gap-1.5 px-4 py-2 overflow-x-auto scrollbar-hide">
       <button
@@ -22,7 +30,7 @@ export function DetailsFilter({ active, onChange }: Props) {
       >
         전체
       </button>
-      {FILTERED_CATEGORIES.map((c) => {
+      {categories.map((c) => {
         const isActive = active === c;
         return (
           <button

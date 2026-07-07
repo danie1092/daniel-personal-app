@@ -1,5 +1,5 @@
 import type { MonthSummary, CategoryBreakdown, CycleSpending } from "@/lib/budget/monthData";
-import { CATEGORY_TOKENS, type BudgetCategory } from "@/lib/budget/categoryTokens";
+import { tokenOf } from "@/lib/budget/categoryTokens";
 import { DonutChart } from "./DonutChart";
 import { FixedExpenseButton } from "./FixedExpenseButton";
 
@@ -77,7 +77,7 @@ export function SummaryTab({ summary, breakdown, trend }: Props) {
         ) : (
           <div className="flex flex-col gap-2.5">
             {breakdown.map((b) => {
-              const tok = CATEGORY_TOKENS[b.category as BudgetCategory] ?? CATEGORY_TOKENS.미분류;
+              const tok = tokenOf(b.category);
               const widthPct = maxAmount > 0 ? (b.amount / maxAmount) * 100 : 0;
               return (
                 <div key={b.category}>

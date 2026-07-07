@@ -23,6 +23,17 @@ describe("effectiveVariableTargets", () => {
     expect(effectiveVariableBudget(overrides)).toBe(VARIABLE_BUDGET + 200_000);
   });
 
+  test("정규 커스텀 카테고리는 기본값처럼 합산", () => {
+    const t = effectiveVariableTargets([], { 식료품: 200_000 });
+    expect(t.식료품).toBe(200_000);
+    expect(effectiveVariableBudget([], { 식료품: 200_000 })).toBe(VARIABLE_BUDGET + 200_000);
+  });
+
+  test("커스텀 카테고리 위에 그 달 오버라이드가 이긴다", () => {
+    const t = effectiveVariableTargets([{ category: "식료품", amount: 150_000 }], { 식료품: 200_000 });
+    expect(t.식료품).toBe(150_000);
+  });
+
   test("고정비 키는 무시 (고정비 탭이 단일 소스)", () => {
     const t = effectiveVariableTargets([{ category: "고정비", amount: 999 }]);
     expect(t.고정비).toBeUndefined();

@@ -1,6 +1,6 @@
 import type { MonthSummary } from "@/lib/budget/monthData";
 import type { Subscription } from "@/lib/budget/subscriptions";
-import { CATEGORY_TOKENS, type BudgetCategory } from "@/lib/budget/categoryTokens";
+import { tokenOf } from "@/lib/budget/categoryTokens";
 import { BudgetProgressBar, budgetBarColor } from "@/components/budget/BudgetProgressBar";
 import { SubscriptionDeleteButton } from "./SubscriptionDeleteButton";
 
@@ -63,7 +63,7 @@ export function SubscriptionsTab({ subs, monthlyTotal, summary }: Props) {
         ) : (
           <div className="flex flex-col gap-2">
             {subs.map((s, i) => {
-              const tok = CATEGORY_TOKENS[s.category as BudgetCategory] ?? CATEGORY_TOKENS.미분류;
+              const tok = tokenOf(s.category);
               return (
                 <div
                   key={`${s.name}-${i}`}

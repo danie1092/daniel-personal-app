@@ -28,9 +28,11 @@ type Props = {
   entries: BudgetEntry[];
   summary: MonthSummary;
   todayStr: string;
+  /** 정규 전환된 커스텀 카테고리 이름들 (필터 칩 + 수정 시트 선택지) */
+  customCategories?: string[];
 };
 
-export function DetailsTab({ entries, summary, todayStr }: Props) {
+export function DetailsTab({ entries, summary, todayStr, customCategories = [] }: Props) {
   // Category filter is purely client-side: clicking chips re-filters the
   // already-loaded `entries` array instead of triggering a server round-trip.
   const [filter, setFilter] = useState<string | null>(null);
@@ -88,7 +90,7 @@ export function DetailsTab({ entries, summary, todayStr }: Props) {
       </div>
 
       <div className="bg-surface">
-        <DetailsFilter active={filter} onChange={setFilter} />
+        <DetailsFilter active={filter} onChange={setFilter} extraCategories={customCategories} />
       </div>
 
       <div className="bg-surface px-4">
@@ -107,7 +109,9 @@ export function DetailsTab({ entries, summary, todayStr }: Props) {
                     {dayTotal < 0 ? "+" : ""}{Math.abs(dayTotal).toLocaleString()}원
                   </div>
                 </div>
-                {list.map((e) => <EntryRow key={e.id} entry={e} />)}
+                {list.map((e) => (
+                  <EntryRow key={e.id} entry={e} customCategories={customCategories} />
+                ))}
               </div>
             );
           })

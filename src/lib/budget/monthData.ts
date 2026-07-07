@@ -1,13 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
-import type { BudgetCategory } from "./categoryTokens";
 import { budgetMonthRange, cycleDays, prevBudgetMonth } from "./cycle";
+import { nowKST } from "@/lib/kst";
 import { getFixedExpensesTotal } from "./fixedExpenses";
 import { getBudgetOverrides, effectiveVariableBudget } from "./plans";
+import { getCustomCategories, customTargetsFor } from "./customCategories";
 
 export type BudgetEntry = {
   id: string;
   date: string;
-  category: BudgetCategory;
+  /** 기본 카테고리 또는 정규 전환된 커스텀 카테고리 이름 */
+  category: string;
   description: string | null;
   memo: string | null;
   amount: number;
@@ -32,7 +34,7 @@ export type MonthSummary = {
 };
 
 export type CategoryBreakdown = {
-  category: BudgetCategory;
+  category: string;
   amount: number;
   pct: number;
 };
@@ -52,7 +54,7 @@ export async function getMonthEntries(yearMonth: string): Promise<BudgetEntry[]>
 export async function getMonthSummary(yearMonth: string): Promise<MonthSummary> {
   const supabase = await createClient();
   const { start, end } = budgetMonthRange(yearMonth);
-  const [{ data }, fixedTotal, overrides] = await Promise.all([
+  const [{ data }, fixedTotal, overrides, customs] = await Promise.all([
     supabase
       .from("budget_entries")
       .select("type, category, amount")
@@ -61,8 +63,9 @@ export async function getMonthSummary(yearMonth: string): Promise<MonthSummary> 
       .order("date", { ascending: false }),
     getFixedExpensesTotal(),
     getBudgetOverrides(yearMonth),
+    getCustomCategories(),
   ]);
-  const variableBudget = effectiveVariableBudget(overrides);
+  const variableBudget = effectiveVariableBudget(overrides, customTargetsFor(customs, yearMonth));
 
   const rows = (data ?? []) as { type: string; category: string; amount: number }[];
 
@@ -78,7 +81,7 @@ export async function getMonthSummary(yearMonth: string): Promise<MonthSummary> 
     else if (r.type === "saving") saving += r.amount;
   }
 
-  const { daysInCycle, daysIntoCycle } = cycleDays(yearMonth, new Date());
+  const { daysInCycle, daysIntoCycle } = cycleDays(yearMonth, nowKST());
 
   return {
     yearMonth,
@@ -136,7 +139,7 @@ export async function getCategoryBreakdown(yearMonth: string): Promise<CategoryB
   }
   const total = Array.from(map.values()).reduce((s, v) => s + v, 0);
   const result: CategoryBreakdown[] = Array.from(map.entries()).map(([category, amount]) => ({
-    category: category as BudgetCategory,
+    category,
     amount,
     pct: total > 0 ? amount / total : 0,
   }));

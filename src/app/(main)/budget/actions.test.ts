@@ -16,6 +16,10 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/lib/auth/requireSession", () => ({
   requireSession: requireSessionMock,
 }));
+vi.mock("@/lib/budget/customCategories", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/budget/customCategories")>();
+  return { ...actual, getCustomCategories: vi.fn(async () => []) };
+});
 vi.mock("next/cache", () => ({
   revalidatePath: revalidatePathMock,
 }));
