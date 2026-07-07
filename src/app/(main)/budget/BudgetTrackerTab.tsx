@@ -1,8 +1,9 @@
 import type { MonthSummary } from "@/lib/budget/monthData";
 import type { BudgetTracker, BudgetStatus } from "@/lib/budget/budgetTracker";
-import { CATEGORY_TOKENS, type BudgetCategory } from "@/lib/budget/categoryTokens";
+import { tokenOf } from "@/lib/budget/categoryTokens";
 import { BudgetProgressBar, budgetBarColor } from "@/components/budget/BudgetProgressBar";
 import type { BudgetOverride } from "@/lib/budget/plans";
+import type { CustomCategory } from "@/lib/budget/customCategories";
 import { NextMonthPlan } from "./NextMonthPlan";
 
 type Props = {
@@ -12,6 +13,8 @@ type Props = {
   nextYearMonth: string;
   nextOverrides: BudgetOverride[];
   fixedTotal: number;
+  /** 다음달 사이클에 적용되는 정규 커스텀 카테고리 */
+  customCategories: CustomCategory[];
 };
 
 function won(n: number): string {
@@ -24,7 +27,7 @@ const STATUS_STYLE: Record<BudgetStatus, { chip: string; bar: string }> = {
   초과: { chip: "bg-rose-50 text-rose-600", bar: "#E11D48" },
 };
 
-export function BudgetTrackerTab({ tracker, summary, nextYearMonth, nextOverrides, fixedTotal }: Props) {
+export function BudgetTrackerTab({ tracker, summary, nextYearMonth, nextOverrides, fixedTotal, customCategories }: Props) {
   const totalRatio =
     tracker.totalBudget > 0 ? tracker.totalSpent / tracker.totalBudget : 0;
   const pacePct =
@@ -61,8 +64,7 @@ export function BudgetTrackerTab({ tracker, summary, nextYearMonth, nextOverride
         <div className="text-[14px] font-bold mb-3">카테고리별 예산</div>
         <div className="flex flex-col gap-3">
           {tracker.lines.map((l) => {
-            const tok =
-              CATEGORY_TOKENS[l.category as BudgetCategory] ?? CATEGORY_TOKENS.미분류;
+            const tok = tokenOf(l.category);
             const st = STATUS_STYLE[l.status];
             return (
               <div key={l.category}>
@@ -110,6 +112,7 @@ export function BudgetTrackerTab({ tracker, summary, nextYearMonth, nextOverride
         nextYearMonth={nextYearMonth}
         overrides={nextOverrides}
         fixedTotal={fixedTotal}
+        customCategories={customCategories}
       />
     </div>
   );

@@ -5,6 +5,11 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ from: fromMock }),
 }));
 
+vi.mock("./customCategories", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./customCategories")>();
+  return { ...actual, getCustomCategories: vi.fn(async () => []) };
+});
+
 import { getMonthEntries, getMonthSummary, getCategoryBreakdown, getRecentCycleSpending } from "./monthData";
 import { cycleDays, budgetMonthRange } from "./cycle";
 

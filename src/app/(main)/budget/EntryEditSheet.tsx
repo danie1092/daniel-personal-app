@@ -1,19 +1,20 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { BUDGET_CATEGORIES, PAYMENT_METHODS } from "@/lib/constants";
+import { PAYMENT_METHODS } from "@/lib/constants";
 import type { BudgetEntry } from "@/lib/budget/monthData";
-import { CATEGORY_TOKENS, NO_PAYMENT_CATEGORIES, type BudgetCategory } from "@/lib/budget/categoryTokens";
+import { tokenOf, categoryPickerOrder, NO_PAYMENT_CATEGORIES } from "@/lib/budget/categoryTokens";
 import { updateBudgetEntry, deleteBudgetEntry } from "./actions";
 
 type Props = {
   entry: BudgetEntry;
+  customCategories?: string[];
   onClose: () => void;
 };
 
-export function EntryEditSheet({ entry, onClose }: Props) {
+export function EntryEditSheet({ entry, customCategories = [], onClose }: Props) {
   const [date, setDate] = useState(entry.date);
-  const [category, setCategory] = useState<BudgetCategory>(entry.category);
+  const [category, setCategory] = useState<string>(entry.category);
   const [description, setDescription] = useState(entry.description ?? "");
   const [memo, setMemo] = useState(entry.memo ?? "");
   const [amount, setAmount] = useState(String(entry.amount));
@@ -93,9 +94,9 @@ export function EntryEditSheet({ entry, onClose }: Props) {
           <div>
             <label className="text-[10px] font-extrabold tracking-wider text-ink-sub uppercase">카테고리</label>
             <div className="grid grid-cols-4 gap-1.5 mt-1.5">
-              {BUDGET_CATEGORIES.map((c) => {
+              {categoryPickerOrder(customCategories).map((c) => {
                 const active = category === c;
-                const tok = CATEGORY_TOKENS[c];
+                const tok = tokenOf(c);
                 return (
                   <button
                     key={c}

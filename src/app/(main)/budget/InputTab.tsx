@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { BUDGET_CATEGORIES, PAYMENT_METHODS } from "@/lib/constants";
-import { CATEGORY_TOKENS, NO_PAYMENT_CATEGORIES, type BudgetCategory } from "@/lib/budget/categoryTokens";
+import { PAYMENT_METHODS } from "@/lib/constants";
+import { tokenOf, categoryPickerOrder, NO_PAYMENT_CATEGORIES } from "@/lib/budget/categoryTokens";
 import { createBudgetEntry } from "./actions";
 
 function todayStr(): string {
@@ -11,13 +11,13 @@ function todayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export function InputTab() {
+export function InputTab({ customCategories = [] }: { customCategories?: string[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
   const [date, setDate] = useState(todayStr());
-  const [category, setCategory] = useState<BudgetCategory>("외식");
+  const [category, setCategory] = useState<string>("외식");
   const [description, setDescription] = useState("");
   const [memo, setMemo] = useState("");
   const [amount, setAmount] = useState("");
@@ -112,9 +112,9 @@ export function InputTab() {
           카테고리
         </div>
         <div className="grid grid-cols-4 gap-1.5">
-          {BUDGET_CATEGORIES.map((c) => {
+          {categoryPickerOrder(customCategories).map((c) => {
             const active = category === c;
-            const tok = CATEGORY_TOKENS[c];
+            const tok = tokenOf(c);
             return (
               <button
                 key={c}

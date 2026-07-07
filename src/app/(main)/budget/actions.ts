@@ -3,10 +3,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/lib/auth/requireSession";
 import { revalidatePath } from "next/cache";
-import { BUDGET_CATEGORIES, PAYMENT_METHODS } from "@/lib/constants";
+import { BUDGET_CATEGORIES, BUDGET_TARGETS, PAYMENT_METHODS } from "@/lib/constants";
 import { getFixedExpenses } from "@/lib/budget/fixedExpenses";
 import { budgetMonthOf } from "@/lib/budget/cycle";
-import { entryType, NO_PAYMENT_CATEGORIES, type BudgetCategory } from "@/lib/budget/categoryTokens";
+import { nowKST } from "@/lib/kst";
+import { entryType, NO_PAYMENT_CATEGORIES } from "@/lib/budget/categoryTokens";
+import { getCustomCategories } from "@/lib/budget/customCategories";
 
 export type ActionResult<T = object> =
   | ({ ok: true } & T)
@@ -20,16 +22,26 @@ const YM_REGEX = /^\d{4}-\d{2}$/;
 
 export type EntryInput = {
   date: string;
-  category: BudgetCategory;
+  /** 기본 카테고리 또는 정규 전환된 커스텀 카테고리 이름 */
+  category: string;
   description: string;
   memo: string;
   amount: number;
   paymentMethod: string | null;
 };
 
-function validateEntry(input: EntryInput): { ok: true } | { ok: false; error: string } {
+/** 기본 카테고리 + 정규 커스텀 카테고리 이름 집합 (엔트리 검증용) */
+async function allowedCategories(): Promise<Set<string>> {
+  const customs = await getCustomCategories();
+  return new Set<string>([...BUDGET_CATEGORIES, ...customs.map((c) => c.name)]);
+}
+
+function validateEntry(
+  input: EntryInput,
+  allowed: ReadonlySet<string>
+): { ok: true } | { ok: false; error: string } {
   if (!DATE_REGEX.test(input.date)) return { ok: false, error: "잘못된 날짜" };
-  if (!BUDGET_CATEGORIES.includes(input.category as (typeof BUDGET_CATEGORIES)[number])) {
+  if (!allowed.has(input.category)) {
     return { ok: false, error: "잘못된 카테고리" };
   }
   if (typeof input.amount !== "number" || !Number.isInteger(input.amount) || input.amount < 0 || input.amount > MAX_AMOUNT) {
@@ -47,7 +59,7 @@ function validateEntry(input: EntryInput): { ok: true } | { ok: false; error: st
   return { ok: true };
 }
 
-function normalizePayment(category: BudgetCategory, paymentMethod: string | null): string | null {
+function normalizePayment(category: string, paymentMethod: string | null): string | null {
   if (NO_PAYMENT_CATEGORIES.has(category)) return null;
   return paymentMethod;
 }
@@ -56,7 +68,7 @@ export async function createBudgetEntry(input: EntryInput): Promise<ActionResult
   const session = await requireSession();
   if (!session.ok) return { ok: false, error: "Unauthorized" };
 
-  const v = validateEntry(input);
+  const v = validateEntry(input, await allowedCategories());
   if (!v.ok) return v;
 
   try {
@@ -91,7 +103,7 @@ export async function updateBudgetEntry(id: string, input: EntryInput): Promise<
 
   if (typeof id !== "string" || id.length === 0) return { ok: false, error: "잘못된 id" };
 
-  const v = validateEntry(input);
+  const v = validateEntry(input, await allowedCategories());
   if (!v.ok) return v;
 
   try {
@@ -346,7 +358,7 @@ const MAX_PLAN_CATEGORY = 30;
 /** 편성은 미래 사이클만 — 당월을 열어두면 달성률 맞추려고 예산을 고치게 된다 (사용자 결정) */
 function assertFutureCycle(yearMonth: string): { ok: true } | { ok: false; error: string } {
   if (!YM_REGEX.test(yearMonth)) return { ok: false, error: "잘못된 yearMonth" };
-  if (yearMonth <= budgetMonthOf(new Date())) {
+  if (yearMonth <= budgetMonthOf(nowKST())) {
     return { ok: false, error: "당월/과거 예산은 수정할 수 없어요 (다음달부터 편성 가능)" };
   }
   return { ok: true };
@@ -411,6 +423,87 @@ export async function deleteBudgetPlan(yearMonth: string, category: string): Pro
     return { ok: true };
   } catch (err) {
     console.error("deleteBudgetPlan:", err instanceof Error ? err.message : "unknown");
+    return { ok: false, error: "Delete failed" };
+  }
+}
+
+// ── 특별예산 → 정규(매월 반복) 전환 ──────────────────────────────
+
+/**
+ * 특별예산(budget_plans의 커스텀 이름 항목)을 정규 카테고리로 전환.
+ * 전환하면 yearMonth 사이클부터 매달 예산에 자동 포함되고,
+ * 지출 입력의 카테고리 선택지에도 올라온다. 기존 편성 줄은 흡수되어 삭제.
+ */
+export async function convertPlanToRegular(
+  yearMonth: string,
+  category: string
+): Promise<ActionResult> {
+  const session = await requireSession();
+  if (!session.ok) return { ok: false, error: "Unauthorized" };
+
+  const future = assertFutureCycle(yearMonth);
+  if (!future.ok) return future;
+  const name = typeof category === "string" ? category.trim() : "";
+  if (!name || name.length > MAX_PLAN_CATEGORY) return { ok: false, error: "잘못된 항목" };
+  if (BUDGET_CATEGORIES.includes(name as (typeof BUDGET_CATEGORIES)[number]) || name in BUDGET_TARGETS) {
+    return { ok: false, error: "기본 카테고리는 이미 정규예요" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data: plan, error: selErr } = await supabase
+      .from("budget_plans")
+      .select("amount")
+      .eq("year_month", yearMonth)
+      .eq("category", name)
+      .maybeSingle();
+    if (selErr || !plan) return { ok: false, error: "편성에 없는 항목이에요" };
+
+    const { error: insErr } = await supabase.from("budget_custom_categories").upsert(
+      {
+        name,
+        amount: (plan as { amount: number }).amount,
+        effective_from: yearMonth,
+      },
+      { onConflict: "name" }
+    );
+    if (insErr) return { ok: false, error: "전환 실패" };
+
+    // 정규 기본값이 됐으니 특별예산 줄은 제거 (남기면 같은 금액의 중복 오버라이드)
+    const { error: delErr } = await supabase
+      .from("budget_plans")
+      .delete()
+      .eq("year_month", yearMonth)
+      .eq("category", name);
+    if (delErr) console.error("convertPlanToRegular cleanup:", delErr.message);
+
+    revalidatePath("/budget");
+    revalidatePath("/home");
+    return { ok: true };
+  } catch (err) {
+    console.error("convertPlanToRegular:", err instanceof Error ? err.message : "unknown");
+    return { ok: false, error: "전환 실패" };
+  }
+}
+
+/** 정규 전환된 커스텀 카테고리 삭제 (기존 지출 내역의 카테고리는 그대로 남음) */
+export async function removeCustomCategory(name: string): Promise<ActionResult> {
+  const session = await requireSession();
+  if (!session.ok) return { ok: false, error: "Unauthorized" };
+  if (typeof name !== "string" || !name.trim()) return { ok: false, error: "잘못된 항목" };
+
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("budget_custom_categories")
+      .delete()
+      .eq("name", name.trim());
+    if (error) return { ok: false, error: "Delete failed" };
+    revalidatePath("/budget");
+    revalidatePath("/home");
+    return { ok: true };
+  } catch (err) {
+    console.error("removeCustomCategory:", err instanceof Error ? err.message : "unknown");
     return { ok: false, error: "Delete failed" };
   }
 }

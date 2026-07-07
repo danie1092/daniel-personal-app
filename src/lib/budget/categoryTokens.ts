@@ -27,13 +27,31 @@ export const CATEGORY_TOKENS: Record<BudgetCategory, CategoryToken> = {
   미분류:            { emoji: "❔", bg: "bg-zinc-100",   text: "text-zinc-600",    hex: "#71717A" },
 };
 
-export function entryType(category: BudgetCategory): "income" | "saving" | "expense" {
+/** 정규 전환된 커스텀 카테고리 (CATEGORY_TOKENS에 없는 이름) 공용 토큰 */
+export const CUSTOM_CATEGORY_TOKEN: CategoryToken = {
+  emoji: "🏷️", bg: "bg-rose-50", text: "text-rose-700", hex: "#BE185D",
+};
+
+/** 카테고리 토큰 조회 — 커스텀 카테고리는 공용 토큰으로 폴백 */
+export function tokenOf(category: string): CategoryToken {
+  return CATEGORY_TOKENS[category as BudgetCategory] ?? CUSTOM_CATEGORY_TOKEN;
+}
+
+/** 카테고리 선택지 순서 — 커스텀은 지출 카테고리 끝('기타' 뒤), 월급·저축·미분류 앞 */
+export function categoryPickerOrder(customCategories: string[]): string[] {
+  const base: string[] = [...BUDGET_CATEGORIES];
+  const idx = base.indexOf("기타") + 1;
+  return [...base.slice(0, idx), ...customCategories, ...base.slice(idx)];
+}
+
+/** 커스텀 카테고리는 항상 지출 */
+export function entryType(category: string): "income" | "saving" | "expense" {
   if (category === "월급") return "income";
   if (category === "저축") return "saving";
   return "expense";
 }
 
-export const NO_PAYMENT_CATEGORIES: ReadonlySet<BudgetCategory> = new Set([
+export const NO_PAYMENT_CATEGORIES: ReadonlySet<string> = new Set([
   "월급",
   "저축",
 ] as const);

@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { budgetMonthOf, budgetMonthRange, cycleDays, prevBudgetMonth } from "./cycle";
+import { nowKST } from "@/lib/kst";
 import { noSpendStats } from "./insights";
 import { getBudgetOverrides, effectiveVariableBudget } from "./plans";
+import { getCustomCategories, customTargetsFor } from "./customCategories";
 
 export type BudgetSummary = {
   /** 변동지출 예산 (고정비 제외, 그 달 편성 오버라이드 반영 — 지출 합계와 같은 기준) */
@@ -31,7 +33,7 @@ function addDays(dateStr: string, days: number): string {
 
 export async function getBudgetSummary(): Promise<BudgetSummary> {
   const supabase = await createClient();
-  const today = new Date();
+  const today = nowKST();
   const todayStr = localDateStr(today);
   const cycle = budgetMonthOf(today);
   const mStart = budgetMonthRange(cycle).start;
@@ -43,7 +45,7 @@ export async function getBudgetSummary(): Promise<BudgetSummary> {
   const prevPoint = addDays(prevRange.start, daysIntoCycle - 1);
   const prevEnd = prevPoint < prevRange.end ? prevPoint : prevRange.end;
 
-  const [{ data }, { data: prevData }, overrides] = await Promise.all([
+  const [{ data }, { data: prevData }, overrides, customs] = await Promise.all([
     supabase
       .from("budget_entries")
       .select("amount, date, category")
@@ -58,6 +60,7 @@ export async function getBudgetSummary(): Promise<BudgetSummary> {
       .neq("category", "고정비")
       .eq("type", "expense"),
     getBudgetOverrides(cycle),
+    getCustomCategories(),
   ]);
 
   const all = (data ?? []) as { amount: number; date: string; category: string }[];
@@ -80,7 +83,7 @@ export async function getBudgetSummary(): Promise<BudgetSummary> {
     prevEntries.length > 0 ? prevEntries.reduce((sum, e) => sum + e.amount, 0) : null;
 
   return {
-    monthlyBudget: effectiveVariableBudget(overrides),
+    monthlyBudget: effectiveVariableBudget(overrides, customTargetsFor(customs, cycle)),
     monthSpending,
     monthSpendingWithFixed,
     todaySpending,

@@ -1,7 +1,13 @@
 import { getBudgetSummary } from "@/lib/budget/summary";
-import { getRecentMemos } from "@/lib/memo/recent";
+import { getSavingsOverview } from "@/lib/budget/savings";
+import { getCategoryBreakdown } from "@/lib/budget/monthData";
+import { getBudgetOverrides, effectiveVariableTargets } from "@/lib/budget/plans";
+import { getCustomCategories, customTargetsFor } from "@/lib/budget/customCategories";
+import { budgetMonthOf } from "@/lib/budget/cycle";
+import { nowKST } from "@/lib/kst";
 import { HomeKPICard } from "./HomeKPICard";
-import { HomeMemoCard } from "./HomeMemoCard";
+import { HomeSavingsCard } from "./HomeSavingsCard";
+import { HomeCategoryCard, type HomeCategoryLine } from "./HomeCategoryCard";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
 
@@ -23,12 +29,30 @@ function getGreeting(d: Date): string {
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [budget, memos] = await Promise.all([
+  const today = nowKST();
+  const cycle = budgetMonthOf(today);
+
+  const [budget, savings, breakdown, overrides, customs] = await Promise.all([
     getBudgetSummary(),
-    getRecentMemos(3),
+    getSavingsOverview(),
+    getCategoryBreakdown(cycle),
+    getBudgetOverrides(cycle),
+    getCustomCategories(),
   ]);
 
-  const today = new Date();
+  // 카테고리 미니 트래커: 예산 잡힌 변동 카테고리 중 지출 많은 순 상위 4개
+  const targets = effectiveVariableTargets(overrides, customTargetsFor(customs, cycle));
+  const spentMap = new Map(breakdown.map((b) => [b.category, b.amount]));
+  const categoryLines: HomeCategoryLine[] = Object.entries(targets)
+    .map(([category, budgetAmount]) => ({
+      category,
+      spent: spentMap.get(category) ?? 0,
+      budget: budgetAmount,
+    }))
+    .sort((a, b) => b.spent - a.spent || b.budget - a.budget)
+    .slice(0, 4);
+
+  const pace = budget.daysInMonth > 0 ? budget.daysIntoMonth / budget.daysInMonth : 0;
 
   return (
     <div className="px-4 pt-5 pb-32 max-w-md mx-auto">
@@ -38,7 +62,12 @@ export default async function HomePage() {
       </header>
 
       <HomeKPICard {...budget} />
-      <HomeMemoCard memos={memos} />
+      <HomeSavingsCard {...savings} />
+      <HomeCategoryCard
+        lines={categoryLines}
+        pace={pace}
+        month={Number(cycle.split("-")[1])}
+      />
     </div>
   );
 }

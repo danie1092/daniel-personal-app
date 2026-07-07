@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { nowKST } from "@/lib/kst";
 import type { BudgetEntry } from "./monthData";
 
 /**
@@ -60,7 +61,7 @@ function yearMonth(dateStr: string): string {
 }
 
 function currentYearMonth(): string {
-  const d = new Date();
+  const d = nowKST();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
@@ -182,7 +183,7 @@ export function detectSubscriptions(
 /** 최근 N개월치 지출 entries 조회 (구독탐지 입력용) */
 export async function getRecentEntries(months = 4): Promise<BudgetEntry[]> {
   const supabase = await createClient();
-  const d = new Date();
+  const d = nowKST();
   d.setMonth(d.getMonth() - (months - 1));
   const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
   const { data } = await supabase

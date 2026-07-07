@@ -2,12 +2,18 @@
 
 import { useState } from "react";
 import type { BudgetEntry } from "@/lib/budget/monthData";
-import { CATEGORY_TOKENS, type BudgetCategory } from "@/lib/budget/categoryTokens";
+import { tokenOf } from "@/lib/budget/categoryTokens";
 import { EntryEditSheet } from "./EntryEditSheet";
 
-export function EntryRow({ entry }: { entry: BudgetEntry }) {
+export function EntryRow({
+  entry,
+  customCategories = [],
+}: {
+  entry: BudgetEntry;
+  customCategories?: string[];
+}) {
   const [open, setOpen] = useState(false);
-  const tok = CATEGORY_TOKENS[entry.category as BudgetCategory] ?? CATEGORY_TOKENS.미분류;
+  const tok = tokenOf(entry.category);
   const isIncome = entry.type === "income";
   const time = new Date(entry.created_at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
 
@@ -34,7 +40,13 @@ export function EntryRow({ entry }: { entry: BudgetEntry }) {
           {isIncome ? "+" : ""}{entry.amount.toLocaleString()}원
         </div>
       </button>
-      {open && <EntryEditSheet entry={entry} onClose={() => setOpen(false)} />}
+      {open && (
+        <EntryEditSheet
+          entry={entry}
+          customCategories={customCategories}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </>
   );
 }

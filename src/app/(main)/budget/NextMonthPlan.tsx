@@ -2,9 +2,15 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { BUDGET_TARGETS } from "@/lib/constants";
-import { CATEGORY_TOKENS, type BudgetCategory } from "@/lib/budget/categoryTokens";
+import { tokenOf } from "@/lib/budget/categoryTokens";
 import type { BudgetOverride } from "@/lib/budget/plans";
-import { upsertBudgetPlan, deleteBudgetPlan } from "./actions";
+import type { CustomCategory } from "@/lib/budget/customCategories";
+import {
+  upsertBudgetPlan,
+  deleteBudgetPlan,
+  convertPlanToRegular,
+  removeCustomCategory,
+} from "./actions";
 
 function won(n: number): string {
   return `${n.toLocaleString()}원`;
@@ -13,24 +19,48 @@ function won(n: number): string {
 type PlanLine = {
   category: string;
   amount: number;
-  defaultAmount: number | null; // null = 특별예산 (기본 카테고리 아님)
+  /**
+   * default = 기본 카테고리, custom = 정규 전환된 커스텀 카테고리,
+   * special = 그 달에만 있는 특별예산
+   */
+  kind: "default" | "custom" | "special";
+  /** 오버라이드 없을 때의 기본 금액 (special은 null) */
+  defaultAmount: number | null;
   overridden: boolean;
 };
 
-function buildLines(overrides: BudgetOverride[]): PlanLine[] {
+function buildLines(overrides: BudgetOverride[], customs: CustomCategory[]): PlanLine[] {
   const defaults = BUDGET_TARGETS as Record<string, number>;
   const overrideMap = new Map(overrides.map((o) => [o.category, o.amount]));
+  const customNames = new Set(customs.map((c) => c.name));
 
   const lines: PlanLine[] = Object.keys(defaults).map((category) => ({
     category,
     amount: overrideMap.get(category) ?? defaults[category],
+    kind: "default",
     defaultAmount: defaults[category],
     overridden: overrideMap.has(category),
   }));
-  // 특별예산 (기본 카테고리 밖)
+  // 정규 전환된 커스텀 카테고리 — 매월 자동 포함, 기본값은 전환 시점 금액
+  for (const c of customs) {
+    lines.push({
+      category: c.name,
+      amount: overrideMap.get(c.name) ?? c.amount,
+      kind: "custom",
+      defaultAmount: c.amount,
+      overridden: overrideMap.has(c.name),
+    });
+  }
+  // 특별예산 (기본에도 커스텀에도 없는 이름)
   for (const o of overrides) {
-    if (!(o.category in defaults) && o.category !== "고정비") {
-      lines.push({ category: o.category, amount: o.amount, defaultAmount: null, overridden: true });
+    if (!(o.category in defaults) && !customNames.has(o.category) && o.category !== "고정비") {
+      lines.push({
+        category: o.category,
+        amount: o.amount,
+        kind: "special",
+        defaultAmount: null,
+        overridden: true,
+      });
     }
   }
   return lines.sort((a, b) => b.amount - a.amount);
@@ -42,13 +72,15 @@ type Props = {
   overrides: BudgetOverride[];
   /** 고정비 탭 합계 — 읽기 전용 표시용 */
   fixedTotal: number;
+  /** 다음달 사이클에 적용되는 정규 커스텀 카테고리 */
+  customCategories: CustomCategory[];
 };
 
-export function NextMonthPlan({ nextYearMonth, overrides, fixedTotal }: Props) {
+export function NextMonthPlan({ nextYearMonth, overrides, fixedTotal, customCategories }: Props) {
   const [open, setOpen] = useState(false);
   const [sheet, setSheet] = useState<PlanLine | "new" | null>(null);
 
-  const lines = buildLines(overrides);
+  const lines = buildLines(overrides, customCategories);
   const variableTotal = lines.reduce((s, l) => s + l.amount, 0);
   const month = Number(nextYearMonth.split("-")[1]);
 
@@ -79,7 +111,7 @@ export function NextMonthPlan({ nextYearMonth, overrides, fixedTotal }: Props) {
           </div>
           <div className="flex flex-col">
             {lines.map((l) => {
-              const tok = CATEGORY_TOKENS[l.category as BudgetCategory];
+              const tok = tokenOf(l.category);
               return (
                 <button
                   key={l.category}
@@ -87,12 +119,15 @@ export function NextMonthPlan({ nextYearMonth, overrides, fixedTotal }: Props) {
                   className="flex items-center justify-between py-2 border-b border-hair-light text-left active:opacity-70"
                 >
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-[14px]">{tok?.emoji ?? "🎁"}</span>
+                    <span className="text-[14px]">{l.kind === "special" ? "🎁" : tok.emoji}</span>
                     <span className="text-[13px] font-semibold truncate">{l.category}</span>
-                    {l.defaultAmount === null && (
+                    {l.kind === "special" && (
                       <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 text-[9px] font-bold">특별</span>
                     )}
-                    {l.overridden && l.defaultAmount !== null && (
+                    {l.kind === "custom" && (
+                      <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[9px] font-bold">정규·매월</span>
+                    )}
+                    {l.overridden && l.kind !== "special" && (
                       <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-primary-soft text-primary text-[9px] font-bold">수정됨</span>
                     )}
                   </div>
@@ -145,7 +180,7 @@ function PlanEditSheet({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const isSpecial = line === null || line.defaultAmount === null;
+  const isSpecial = line === null || line.kind === "special";
   const month = Number(nextYearMonth.split("-")[1]);
 
   useEffect(() => {
@@ -156,15 +191,10 @@ function PlanEditSheet({
     };
   }, []);
 
-  function handleSave() {
+  function run(action: () => Promise<{ ok: true } | { ok: false; error: string }>) {
     setError(null);
-    const amt = Number(amount);
-    if (!Number.isInteger(amt) || amt < 0) {
-      setError("금액을 0 이상 정수로 입력하세요");
-      return;
-    }
     startTransition(async () => {
-      const result = await upsertBudgetPlan(nextYearMonth, category, amt);
+      const result = await action();
       if (!result.ok) {
         setError(result.error);
         return;
@@ -173,22 +203,42 @@ function PlanEditSheet({
     });
   }
 
-  /** 기본 카테고리면 기본값 복귀, 특별예산이면 항목 삭제 */
+  function handleSave() {
+    const amt = Number(amount);
+    if (!Number.isInteger(amt) || amt < 0) {
+      setError("금액을 0 이상 정수로 입력하세요");
+      return;
+    }
+    run(() => upsertBudgetPlan(nextYearMonth, category, amt));
+  }
+
+  /** 기본/정규 카테고리면 기본값 복귀, 특별예산이면 항목 삭제 */
   function handleReset() {
     if (!line) return;
     const msg = line.defaultAmount !== null
       ? `기본값(${line.defaultAmount.toLocaleString()}원)으로 되돌릴까요?`
       : `'${line.category}' 특별예산을 삭제할까요?`;
     if (!confirm(msg)) return;
-    setError(null);
-    startTransition(async () => {
-      const result = await deleteBudgetPlan(nextYearMonth, line.category);
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      onClose();
-    });
+    run(() => deleteBudgetPlan(nextYearMonth, line.category));
+  }
+
+  /** 특별예산 → 정규(매월 반복) 전환 */
+  function handleConvert() {
+    if (!line) return;
+    if (
+      !confirm(
+        `'${line.category}'을(를) 정규 카테고리로 전환할까요?\n${month}월부터 매달 예산에 자동으로 들어가고, 지출 입력 카테고리에도 추가돼요.`
+      )
+    )
+      return;
+    run(() => convertPlanToRegular(nextYearMonth, line.category));
+  }
+
+  /** 정규 전환된 커스텀 카테고리 제거 */
+  function handleRemoveCustom() {
+    if (!line) return;
+    if (!confirm(`'${line.category}' 정규 카테고리를 삭제할까요?\n다음 달부터 예산에서 빠져요 (기존 지출 기록은 유지).`)) return;
+    run(() => removeCustomCategory(line.category));
   }
 
   return (
@@ -231,6 +281,26 @@ function PlanEditSheet({
               <div className="text-[11px] text-ink-muted mt-1">기본값 {won(line.defaultAmount)}</div>
             )}
           </div>
+
+          {line?.kind === "special" && (
+            <button
+              onClick={handleConvert}
+              disabled={pending}
+              className="w-full py-2.5 bg-rose-50 text-rose-700 rounded-input text-[13px] font-bold disabled:opacity-50"
+            >
+              🔁 정규 카테고리로 전환 (매월 자동 포함)
+            </button>
+          )}
+
+          {line?.kind === "custom" && (
+            <button
+              onClick={handleRemoveCustom}
+              disabled={pending}
+              className="w-full py-2 text-[12px] text-ink-muted underline underline-offset-2 disabled:opacity-50"
+            >
+              정규 카테고리에서 삭제 (매월 반복 해제)
+            </button>
+          )}
 
           {error && <p className="text-[12px] text-danger">{error}</p>}
         </div>

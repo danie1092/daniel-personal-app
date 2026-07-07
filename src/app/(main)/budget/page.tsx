@@ -20,18 +20,20 @@ import {
 } from "@/lib/budget/subscriptions";
 import { buildBudgetTracker } from "@/lib/budget/budgetTracker";
 import { budgetMonthOf, nextBudgetMonth } from "@/lib/budget/cycle";
+import { nowKST } from "@/lib/kst";
 import { getFixedExpenses, fixedExpensesTotal } from "@/lib/budget/fixedExpenses";
 import { getBudgetOverrides, effectiveVariableTargets } from "@/lib/budget/plans";
+import { getCustomCategories, customTargetsFor } from "@/lib/budget/customCategories";
 import { FixedTab } from "./FixedTab";
 
 export const dynamic = "force-dynamic";
 
 function currentYearMonth(): string {
-  return budgetMonthOf(new Date());
+  return budgetMonthOf(nowKST());
 }
 
 function todayStr(): string {
-  const d = new Date();
+  const d = nowKST();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
@@ -57,7 +59,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
   const needsFixedItems = tab === "fixed" || tab === "tracker";
   // 다음달 편성은 항상 "실제 현재 사이클"의 다음 달 (과거 달을 보고 있어도)
   const nextYm = nextBudgetMonth(currentYearMonth());
-  const [entries, summary, breakdown, recentForSubs, trend, fixedItems, exclusions, overrides, nextOverrides] =
+  const [entries, summary, breakdown, recentForSubs, trend, fixedItems, exclusions, overrides, nextOverrides, customs] =
     await Promise.all([
       needsMonthEntries ? getMonthEntries(yearMonth) : Promise.resolve([]),
       getMonthSummary(yearMonth),
@@ -68,7 +70,12 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
       tab === "subs" ? getSubscriptionExclusions() : Promise.resolve(new Set<string>()),
       tab === "tracker" ? getBudgetOverrides(yearMonth) : Promise.resolve([]),
       tab === "tracker" ? getBudgetOverrides(nextYm) : Promise.resolve([]),
+      // 커스텀 카테고리는 트래커(예산)·입력/세부(카테고리 선택지)에서 필요
+      tab === "tracker" || tab === "input" || tab === "details"
+        ? getCustomCategories()
+        : Promise.resolve([]),
     ]);
+  const customNames = customs.map((c) => c.name);
 
   const subs =
     tab === "subs"
@@ -81,7 +88,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
       ? buildBudgetTracker(
           Object.fromEntries(breakdown.map((b) => [b.category, b.amount])),
           fixedExpensesTotal(fixedItems),
-          effectiveVariableTargets(overrides)
+          effectiveVariableTargets(overrides, customTargetsFor(customs, yearMonth))
         )
       : null;
 
@@ -102,7 +109,12 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
 
       {tab === "details" && (
         <Suspense fallback={null}>
-          <DetailsTab entries={entries} summary={summary} todayStr={todayStr()} />
+          <DetailsTab
+            entries={entries}
+            summary={summary}
+            todayStr={todayStr()}
+            customCategories={customNames}
+          />
         </Suspense>
       )}
       {tab === "tracker" && tracker && (
@@ -112,11 +124,12 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
           nextYearMonth={nextYm}
           nextOverrides={nextOverrides}
           fixedTotal={fixedExpensesTotal(fixedItems)}
+          customCategories={customs.filter((c) => c.effective_from <= nextYm)}
         />
       )}
       {tab === "input" && (
         <Suspense fallback={null}>
-          <InputTab />
+          <InputTab customCategories={customNames} />
         </Suspense>
       )}
       {tab === "summary" && (

@@ -1,6 +1,6 @@
-import { CATEGORY_TOKENS, type BudgetCategory } from "@/lib/budget/categoryTokens";
+import { tokenOf } from "@/lib/budget/categoryTokens";
 
-type Slice = { category: BudgetCategory; amount: number };
+type Slice = { category: string; amount: number };
 
 export function DonutChart({ data }: { data: Slice[] }) {
   const total = data.reduce((s, d) => s + d.amount, 0);
@@ -38,7 +38,7 @@ export function DonutChart({ data }: { data: Slice[] }) {
           cy={cy}
           r={radius}
           fill="none"
-          stroke={CATEGORY_TOKENS[s.category]?.hex ?? "#D1D5DB"}
+          stroke={tokenOf(s.category).hex}
           strokeWidth={strokeWidth}
           strokeDasharray={`${s.dash} ${circ}`}
           strokeDashoffset={-s.offset * circ}

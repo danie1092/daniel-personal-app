@@ -4,6 +4,11 @@ const fromMock = vi.fn();
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({ from: fromMock }),
 }));
+// 커스텀 카테고리 없음 가정 (customTargetsFor는 실제 구현 사용)
+vi.mock("./customCategories", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./customCategories")>();
+  return { ...actual, getCustomCategories: vi.fn(async () => []) };
+});
 
 import { getBudgetSummary } from "./summary";
 import { cycleDays, budgetMonthOf } from "./cycle";
