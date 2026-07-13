@@ -3,6 +3,7 @@ import { parseWoori } from "./woori";
 
 const SMS_DATE = new Date("2026-04-06T23:20:00+09:00");
 const SMS_DATE_JUN = new Date("2026-06-23T20:12:00+09:00");
+const SMS_DATE_JUL = new Date("2026-07-12T14:41:00+09:00");
 
 describe("parseWoori", () => {
   test("신 포맷 (실제 문자)", () => {
@@ -42,6 +43,22 @@ describe("parseWoori", () => {
 메가엠지씨커피 응암점
 누적100,000원`;
     expect(parseWoori(text, SMS_DATE_JUN)?.merchant).toBe("메가엠지씨커피 응암점");
+  });
+
+  test("해외승인 (USD → 고정환율 환산)", () => {
+    const text = `[Web발신]
+우리(0157)해외승인
+함*영님
+USD 17.99
+07/12 14:41
+GOOGLE *Yo`;
+    // 17.99 * 1540 = 27,704.6 → 반올림 27,705
+    expect(parseWoori(text, SMS_DATE_JUL)).toEqual({
+      amount: 27705,
+      merchant: "GOOGLE *Yo",
+      date: "2026-07-12",
+      payment_method: "우리카드",
+    });
   });
 
   test("우리카드 아님 → null", () => {
