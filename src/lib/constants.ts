@@ -1,5 +1,5 @@
 export const BUDGET_CATEGORIES = [
-  "온라인쇼핑",
+  "쇼핑",
   "고정비",
   "의료·건강",
   "구독·렌탈",
@@ -20,7 +20,7 @@ export const BUDGET_CATEGORIES = [
  * 월급·저축·미분류는 예산 대상 아님.
  */
 export const BUDGET_TARGETS: Partial<Record<(typeof BUDGET_CATEGORIES)[number], number>> = {
-  온라인쇼핑: 400_000,
+  쇼핑: 400_000,
   "의료·건강": 50_000,
   "구독·렌탈": 100_000, // 유튜브·네이버·쿠팡 정도 (코웨이·클로드는 고정비로)
   교통: 110_000,
