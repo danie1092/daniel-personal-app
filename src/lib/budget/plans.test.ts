@@ -9,9 +9,9 @@ describe("effectiveVariableTargets", () => {
   });
 
   test("기본 카테고리 오버라이드 반영", () => {
-    const t = effectiveVariableTargets([{ category: "온라인쇼핑", amount: 300_000 }]);
-    expect(t.온라인쇼핑).toBe(300_000);
-    expect(effectiveVariableBudget([{ category: "온라인쇼핑", amount: 300_000 }])).toBe(
+    const t = effectiveVariableTargets([{ category: "쇼핑", amount: 300_000 }]);
+    expect(t.쇼핑).toBe(300_000);
+    expect(effectiveVariableBudget([{ category: "쇼핑", amount: 300_000 }])).toBe(
       VARIABLE_BUDGET - 100_000
     );
   });

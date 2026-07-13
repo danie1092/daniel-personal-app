@@ -12,7 +12,7 @@ export type CategoryToken = {
 };
 
 export const CATEGORY_TOKENS: Record<BudgetCategory, CategoryToken> = {
-  온라인쇼핑:        { emoji: "🛒", bg: "bg-purple-50",  text: "text-purple-700",  hex: "#9333EA" },
+  쇼핑:              { emoji: "🛒", bg: "bg-purple-50",  text: "text-purple-700",  hex: "#9333EA" },
   고정비:            { emoji: "📌", bg: "bg-violet-50",  text: "text-violet-700",  hex: "#7C3AED" },
   "의료·건강":       { emoji: "💊", bg: "bg-teal-50",    text: "text-teal-700",    hex: "#0F766E" },
   "구독·렌탈":       { emoji: "📺", bg: "bg-cyan-50",    text: "text-cyan-700",    hex: "#0891B2" },
