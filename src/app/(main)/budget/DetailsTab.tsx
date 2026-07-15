@@ -67,25 +67,28 @@ export function DetailsTab({ entries, summary, todayStr, customCategories = [] }
           예산의 {Math.round(ratio * 100)}% · 한 달 {Math.round(pace * 100)}% 지남 · {comment}
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-hair-light">
-          <div className="text-center">
-            <div className="text-[10px] text-ink-muted mb-1">월급</div>
-            <div className="text-[13px] font-bold text-success">
-              {summary.income.toLocaleString()}
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-[10px] text-ink-muted mb-1">저축</div>
-            <div className="text-[13px] font-bold text-primary">
-              {summary.saving.toLocaleString()}
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-[10px] text-ink-muted mb-1">잔액</div>
-            <div className="text-[13px] font-bold">
-              {summary.remaining.toLocaleString()}
-            </div>
-          </div>
+        {/* 월급·저축 — 탭하면 해당 유형 입력으로 바로 이동. 아직 없으면 넛지 */}
+        <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-hair-light">
+          <Link href="/budget?tab=input&kind=income" className="text-center active:opacity-70">
+            <div className="text-[10px] text-ink-muted mb-1">💰 월급</div>
+            {summary.income > 0 ? (
+              <div className="text-[13px] font-bold text-success">
+                {summary.income.toLocaleString()}
+              </div>
+            ) : (
+              <div className="text-[12px] font-semibold text-ink-muted">탭해서 입력 →</div>
+            )}
+          </Link>
+          <Link href="/budget?tab=input&kind=saving" className="text-center active:opacity-70">
+            <div className="text-[10px] text-ink-muted mb-1">🏦 저축</div>
+            {summary.saving > 0 ? (
+              <div className="text-[13px] font-bold text-primary">
+                {summary.saving.toLocaleString()}
+              </div>
+            ) : (
+              <div className="text-[12px] font-semibold text-ink-muted">탭해서 입력 →</div>
+            )}
+          </Link>
         </div>
       </div>
 

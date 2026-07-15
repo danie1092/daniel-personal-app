@@ -26,7 +26,11 @@ export function InputTab({ customCategories = [] }: { customCategories?: string[
   const pathname = usePathname();
 
   const [date, setDate] = useState(todayStr());
-  const [kind, setKind] = useState<EntryKind>("expense");
+  // 세부내역 월급/저축 칸에서 진입 시 해당 유형이 미리 선택됨 (?kind=income|saving)
+  const kindParam = searchParams.get("kind");
+  const [kind, setKind] = useState<EntryKind>(
+    kindParam === "saving" || kindParam === "income" ? kindParam : "expense"
+  );
   const [category, setCategory] = useState<string>("외식");
   const [description, setDescription] = useState("");
   const [memo, setMemo] = useState("");
@@ -99,6 +103,7 @@ export function InputTab({ customCategories = [] }: { customCategories?: string[
       setTimeout(() => {
         const params = new URLSearchParams(searchParams.toString());
         params.delete("tab");
+        params.delete("kind");
         const qs = params.toString();
         router.replace(qs ? `${pathname}?${qs}` : pathname);
       }, 500);
