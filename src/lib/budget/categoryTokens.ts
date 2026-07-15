@@ -44,6 +44,11 @@ export function categoryPickerOrder(customCategories: string[]): string[] {
   return [...base.slice(0, idx), ...customCategories, ...base.slice(idx)];
 }
 
+/** 입력 탭 지출 카테고리 선택지 — 저축·월급은 상단 유형 선택으로 분리되어 그리드에서 제외 */
+export function expensePickerOrder(customCategories: string[]): string[] {
+  return categoryPickerOrder(customCategories).filter((c) => !NO_PAYMENT_CATEGORIES.has(c));
+}
+
 /** 커스텀 카테고리는 항상 지출 */
 export function entryType(category: string): "income" | "saving" | "expense" {
   if (category === "월급") return "income";

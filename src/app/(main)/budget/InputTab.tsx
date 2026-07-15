@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { PAYMENT_METHODS } from "@/lib/constants";
-import { tokenOf, categoryPickerOrder, NO_PAYMENT_CATEGORIES } from "@/lib/budget/categoryTokens";
+import { tokenOf, expensePickerOrder } from "@/lib/budget/categoryTokens";
 import { createBudgetEntry } from "./actions";
 
 function todayStr(): string {
@@ -11,12 +11,22 @@ function todayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** 상단 유형 선택 — 저축·월급은 지출 카테고리와 분리해서 관리 */
+type EntryKind = "expense" | "saving" | "income";
+
+const ENTRY_KINDS: { key: EntryKind; label: string; category: string | null }[] = [
+  { key: "expense", label: "지출", category: null },
+  { key: "saving", label: "저축", category: "저축" },
+  { key: "income", label: "월급", category: "월급" },
+];
+
 export function InputTab({ customCategories = [] }: { customCategories?: string[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
   const [date, setDate] = useState(todayStr());
+  const [kind, setKind] = useState<EntryKind>("expense");
   const [category, setCategory] = useState<string>("외식");
   const [description, setDescription] = useState("");
   const [memo, setMemo] = useState("");
@@ -28,7 +38,10 @@ export function InputTab({ customCategories = [] }: { customCategories?: string[
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const noPayment = NO_PAYMENT_CATEGORIES.has(category);
+  const isExpense = kind === "expense";
+  const effectiveCategory = isExpense
+    ? category
+    : (ENTRY_KINDS.find((k) => k.key === kind)?.category ?? category);
 
   async function handleParseSms() {
     if (!smsText.trim()) return;
@@ -69,11 +82,11 @@ export function InputTab({ customCategories = [] }: { customCategories?: string[
     startTransition(async () => {
       const result = await createBudgetEntry({
         date,
-        category,
+        category: effectiveCategory,
         description,
         memo,
         amount: amt,
-        paymentMethod: noPayment ? null : paymentMethod,
+        paymentMethod: isExpense ? paymentMethod : null,
       });
       if (!result.ok) {
         setError(result.error);
@@ -96,6 +109,33 @@ export function InputTab({ customCategories = [] }: { customCategories?: string[
     <div className="bg-surface px-5 py-5">
       <div className="mb-5">
         <div className="text-[10px] font-extrabold tracking-wider text-ink-sub uppercase mb-2">
+          유형
+        </div>
+        <div className="grid grid-cols-3 gap-1.5">
+          {ENTRY_KINDS.map((k) => {
+            const active = kind === k.key;
+            const tok = k.category ? tokenOf(k.category) : null;
+            return (
+              <button
+                key={k.key}
+                onClick={() => setKind(k.key)}
+                className={
+                  active
+                    ? `${tok ? `${tok.bg} ${tok.text}` : "bg-ink text-white"} px-2 py-2.5 rounded-input text-[12px] font-bold flex items-center justify-center gap-1 ring-2 ring-current`
+                    : "bg-hair-light text-ink-sub px-2 py-2.5 rounded-input text-[12px] font-semibold flex items-center justify-center gap-1"
+                }
+              >
+                {tok && <span className="text-[14px]">{tok.emoji}</span>}
+                {!tok && <span className="text-[14px]">💸</span>}
+                <span>{k.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mb-5">
+        <div className="text-[10px] font-extrabold tracking-wider text-ink-sub uppercase mb-2">
           금액
         </div>
         <input
@@ -107,12 +147,13 @@ export function InputTab({ customCategories = [] }: { customCategories?: string[
         />
       </div>
 
+      {isExpense && (
       <div className="mb-4">
         <div className="text-[10px] font-extrabold tracking-wider text-ink-sub uppercase mb-2">
           카테고리
         </div>
         <div className="grid grid-cols-4 gap-1.5">
-          {categoryPickerOrder(customCategories).map((c) => {
+          {expensePickerOrder(customCategories).map((c) => {
             const active = category === c;
             const tok = tokenOf(c);
             return (
@@ -132,8 +173,9 @@ export function InputTab({ customCategories = [] }: { customCategories?: string[
           })}
         </div>
       </div>
+      )}
 
-      {!noPayment && (
+      {isExpense && (
         <div className="mb-4">
           <div className="text-[10px] font-extrabold tracking-wider text-ink-sub uppercase mb-2">
             결제수단
@@ -163,7 +205,7 @@ export function InputTab({ customCategories = [] }: { customCategories?: string[
         <input
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="예: 김치찌개"
+          placeholder={isExpense ? "예: 김치찌개" : kind === "saving" ? "예: 적금 이체" : "예: 7월 월급"}
           maxLength={200}
           className="w-full bg-hair-light rounded-input px-3 py-2.5 text-[13px] outline-none placeholder:text-ink-muted"
         />
@@ -194,6 +236,7 @@ export function InputTab({ customCategories = [] }: { customCategories?: string[
         />
       </div>
 
+      {isExpense && (
       <div className="mb-4">
         <div className="text-[10px] font-extrabold tracking-wider text-ink-sub uppercase mb-2">
           SMS 붙여넣기
@@ -213,6 +256,7 @@ export function InputTab({ customCategories = [] }: { customCategories?: string[
           {smsParsing ? "파싱 중..." : "SMS 파싱"}
         </button>
       </div>
+      )}
 
       {error && <p className="text-[12px] text-danger mb-3">{error}</p>}
       {success && <p className="text-[12px] text-success mb-3">저장 완료 → 세부내역으로 이동…</p>}
