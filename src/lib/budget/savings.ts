@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { budgetMonthOf, budgetMonthRange, prevBudgetMonth } from "./cycle";
+import { savingStreak } from "./savingsInsights";
 import { nowKST } from "@/lib/kst";
 
 /**
@@ -18,6 +19,10 @@ export type SavingsOverview = {
   cycleIncome: number;
   /** 최근 사이클별 저축 (과거→현재 순, 이번 사이클 포함) */
   recent: CycleSaving[];
+  /** 저축 목표 금액 (미설정 시 null) */
+  goal: number | null;
+  /** 연속 저축 사이클 수 — 진행 중인 이번 사이클이 0이어도 안 깨짐 */
+  streak: number;
 };
 
 export async function getSavingsOverview(recentCount = 6): Promise<SavingsOverview> {
@@ -25,7 +30,7 @@ export async function getSavingsOverview(recentCount = 6): Promise<SavingsOvervi
   const cycle = budgetMonthOf(nowKST());
   const { start, end } = budgetMonthRange(cycle);
 
-  const [{ data: savingData }, { data: incomeData }] = await Promise.all([
+  const [{ data: savingData }, { data: incomeData }, { data: goalData }] = await Promise.all([
     supabase.from("budget_entries").select("amount, date").eq("type", "saving"),
     supabase
       .from("budget_entries")
@@ -33,6 +38,7 @@ export async function getSavingsOverview(recentCount = 6): Promise<SavingsOvervi
       .eq("type", "income")
       .gte("date", start)
       .lte("date", end),
+    supabase.from("savings_goal").select("target_amount").maybeSingle(),
   ]);
 
   const savings = (savingData ?? []) as { amount: number; date: string }[];
@@ -55,10 +61,31 @@ export async function getSavingsOverview(recentCount = 6): Promise<SavingsOvervi
     0
   );
 
+  // 스트릭은 recent(6개) 너머까지 볼 수 있게 첫 저축 사이클부터 계산
+  const allCycles: string[] = [cycle];
+  if (savings.length > 0) {
+    const earliest = savings.reduce((m, e) => (e.date < m ? e.date : m), savings[0].date);
+    while (budgetMonthRange(allCycles[0]).start > earliest) {
+      allCycles.unshift(prevBudgetMonth(allCycles[0]));
+    }
+  }
+  const streak = savingStreak(
+    allCycles.map((ym) => {
+      const range = budgetMonthRange(ym);
+      return {
+        saved: savings
+          .filter((e) => e.date >= range.start && e.date <= range.end)
+          .reduce((s, e) => s + e.amount, 0),
+      };
+    })
+  );
+
   return {
     totalSaved,
     cycleSaved: recent[recent.length - 1].saved,
     cycleIncome,
     recent,
+    goal: (goalData as { target_amount: number } | null)?.target_amount ?? null,
+    streak,
   };
 }

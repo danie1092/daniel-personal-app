@@ -70,7 +70,7 @@ describe("getMonthSummary", () => {
     expect(result.spendingWithFixed).toBe(218500);
     expect(result.income).toBe(3_000_000);
     expect(result.saving).toBe(500_000);
-    expect(result.remaining).toBe(3_000_000 - 18500 - 500_000);
+    expect(result.remaining).toBe(3_000_000 - 218500 - 500_000);
     expect(result.monthlyBudget).toBe(2_259_000);
     expect(result.variableBudget).toBe(1_178_000);
     // 일수는 리셋일 설정(BUDGET_RESET_DAY)에 따라 달라지므로 cycle 헬퍼에서 파생해 검증

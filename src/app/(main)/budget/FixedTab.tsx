@@ -3,7 +3,15 @@
 import { useEffect, useState, useTransition } from "react";
 import { PAYMENT_METHODS } from "@/lib/constants";
 import type { FixedExpense } from "@/lib/budget/fixedExpenses";
-import { createFixedExpense, updateFixedExpense, deleteFixedExpense } from "./actions";
+import type { Subscription } from "@/lib/budget/subscriptions";
+import { tokenOf } from "@/lib/budget/categoryTokens";
+import { SubscriptionDeleteButton } from "./SubscriptionDeleteButton";
+import {
+  createFixedExpense,
+  updateFixedExpense,
+  deleteFixedExpense,
+  registerSubscriptionAsFixed,
+} from "./actions";
 
 function won(n: number): string {
   return `${n.toLocaleString()}원`;
@@ -14,9 +22,19 @@ type SheetState =
   | { mode: "new" }
   | { mode: "edit"; item: FixedExpense };
 
-export function FixedTab({ items }: { items: FixedExpense[] }) {
+type Props = {
+  items: FixedExpense[];
+  /** 자동 감지된 반복 결제 (제외 목록 반영 후) */
+  subs: Subscription[];
+  /** 감지된 monthly 반복 결제 월 합계 */
+  subsTotal: number;
+};
+
+export function FixedTab({ items, subs, subsTotal }: Props) {
   const [sheet, setSheet] = useState<SheetState>({ mode: "closed" });
   const total = items.reduce((s, e) => s + e.amount, 0);
+  // 이미 고정비에 같은 이름이 있으면 승격 버튼 숨김 (중복 등록 방지)
+  const fixedNames = new Set(items.map((i) => i.description));
 
   return (
     <div className="px-4 py-3">
@@ -61,12 +79,96 @@ export function FixedTab({ items }: { items: FixedExpense[] }) {
         </button>
       </div>
 
+      {/* 자동 감지된 반복 결제 — 최근 결제에서 매달 반복되는 것 */}
+      <div className="bg-surface rounded-card p-4 mt-3 border border-hair shadow-card">
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-[14px] font-bold">자동 감지된 반복 결제</div>
+          {subsTotal > 0 && (
+            <div className="text-[12px] font-bold text-primary">매달 {won(subsTotal)}</div>
+          )}
+        </div>
+        <div className="text-[11px] text-ink-muted mb-3">
+          최근 결제에서 매달 반복되는 것만 자동으로 모았어. 고정비로 올리면 위 목록·예산 타깃에 포함돼.
+        </div>
+
+        {subs.length === 0 ? (
+          <div className="py-8 text-center text-[12px] text-ink-muted">
+            아직 반복 결제가 안 잡혔어.
+            <br />
+            몇 달 쌓이면 여기 구독·고정지출이 모여.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {subs.map((s, i) => (
+              <DetectedSubRow
+                key={`${s.name}-${i}`}
+                sub={s}
+                alreadyFixed={fixedNames.has(s.name)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
       {sheet.mode !== "closed" && (
         <FixedExpenseSheet
           item={sheet.mode === "edit" ? sheet.item : null}
           onClose={() => setSheet({ mode: "closed" })}
         />
       )}
+    </div>
+  );
+}
+
+function DetectedSubRow({ sub, alreadyFixed }: { sub: Subscription; alreadyFixed: boolean }) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const tok = tokenOf(sub.category);
+
+  function promote() {
+    setError(null);
+    startTransition(async () => {
+      const result = await registerSubscriptionAsFixed({
+        merchantKey: sub.key,
+        description: sub.name,
+        amount: sub.typicalAmount,
+      });
+      if (!result.ok) setError(result.error);
+    });
+  }
+
+  return (
+    <div className="py-2 border-b border-hair-light last:border-0">
+      <div className="flex items-center gap-3">
+        <span className="text-[18px]">{tok.emoji}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[13px] font-semibold truncate">{sub.name}</span>
+            {sub.isNew && (
+              <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-600 text-[9px] font-bold">
+                NEW
+              </span>
+            )}
+          </div>
+          <div className="text-[10px] text-ink-muted">
+            {sub.cadence === "monthly" ? "매달" : "가끔"} · {sub.months.length}개월 관측
+            {" · "}
+            {sub.lastDate.slice(5).replace("-", "/")} 최근
+          </div>
+        </div>
+        <div className="text-[13px] font-bold shrink-0">{won(sub.typicalAmount)}</div>
+        <SubscriptionDeleteButton merchantKey={sub.key} name={sub.name} />
+      </div>
+      {!alreadyFixed && (
+        <button
+          onClick={promote}
+          disabled={pending}
+          className="mt-1.5 ml-[30px] px-2 py-1 bg-hair-light text-ink-sub rounded-input text-[11px] font-semibold disabled:opacity-50"
+        >
+          {pending ? "등록 중..." : "📌 고정비로 등록"}
+        </button>
+      )}
+      {error && <p className="mt-1 ml-[30px] text-[11px] text-danger">{error}</p>}
     </div>
   );
 }

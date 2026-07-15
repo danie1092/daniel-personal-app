@@ -91,7 +91,8 @@ export async function getMonthSummary(yearMonth: string): Promise<MonthSummary> 
     spendingWithFixed,
     income,
     saving,
-    remaining: income - spending - saving,
+    // 잔액 = 월급 − 총지출(고정비 포함) − 저축. "남는 건 다 저금" 규칙의 기준값.
+    remaining: income - spendingWithFixed - saving,
     daysInMonth: daysInCycle,
     daysIntoMonth: daysIntoCycle,
   };
