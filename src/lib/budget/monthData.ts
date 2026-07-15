@@ -28,7 +28,6 @@ export type MonthSummary = {
   spendingWithFixed: number;
   income: number;
   saving: number;
-  remaining: number;
   daysInMonth: number;
   daysIntoMonth: number;
 };
@@ -91,8 +90,8 @@ export async function getMonthSummary(yearMonth: string): Promise<MonthSummary> 
     spendingWithFixed,
     income,
     saving,
-    // 잔액 = 월급 − 총지출(고정비 포함) − 저축. "남는 건 다 저금" 규칙의 기준값.
-    remaining: income - spendingWithFixed - saving,
+    // "잔액(월급−지출−저축)"은 표시하지 않음 — 카드값이 한 달 뒤에 나가는 실제
+    // 현금흐름과 어긋나 오해만 부른다 (사용자 결정, 2026-07-15).
     daysInMonth: daysInCycle,
     daysIntoMonth: daysIntoCycle,
   };

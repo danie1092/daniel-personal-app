@@ -119,12 +119,6 @@ export function SummaryTab({ summary, breakdown, trend }: Props) {
             </div>
           </div>
         </div>
-        <div className="mt-3 pt-3 border-t border-hair-light">
-          <div className="text-[10px] text-ink-muted mb-1">잔액 (월급 − 총지출·고정비 포함 − 저축)</div>
-          <div className="text-[20px] font-extrabold">
-            {summary.remaining.toLocaleString()}원
-          </div>
-        </div>
       </div>
 
       <FixedExpenseButton yearMonth={summary.yearMonth} />
