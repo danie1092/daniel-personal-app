@@ -508,7 +508,53 @@ export async function removeCustomCategory(name: string): Promise<ActionResult> 
   }
 }
 
+// ── 저축 목표 ─────────────────────────────────────────────────────
+
+/** 홈 저축 카드의 목표 금액 설정/변경 (단일 행 upsert) */
+export async function upsertSavingsGoal(amount: number): Promise<ActionResult> {
+  const session = await requireSession();
+  if (!session.ok) return { ok: false, error: "Unauthorized" };
+  if (typeof amount !== "number" || !Number.isInteger(amount) || amount <= 0 || amount > MAX_AMOUNT) {
+    return { ok: false, error: "잘못된 금액" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("savings_goal")
+      .upsert({ id: true, target_amount: amount, updated_at: new Date().toISOString() }, { onConflict: "id" });
+    if (error) return { ok: false, error: "Save failed" };
+    revalidatePath("/home");
+    revalidatePath("/budget");
+    return { ok: true };
+  } catch (err) {
+    console.error("upsertSavingsGoal:", err instanceof Error ? err.message : "unknown");
+    return { ok: false, error: "Save failed" };
+  }
+}
+
 // ── 구독 탭 제외 목록 ─────────────────────────────────────────────
+
+/**
+ * 자동 감지된 반복 결제를 고정비 항목으로 승격.
+ * 고정비 목록에 추가하고, 감지 목록에서는 제외해 중복 표시를 막는다.
+ */
+export async function registerSubscriptionAsFixed(input: {
+  merchantKey: string;
+  description: string;
+  amount: number;
+}): Promise<ActionResult> {
+  if (typeof input.merchantKey !== "string" || !input.merchantKey.trim() || input.merchantKey.length > 200) {
+    return { ok: false, error: "잘못된 항목" };
+  }
+  const created = await createFixedExpense({
+    description: input.description,
+    amount: input.amount,
+    paymentMethod: null,
+  });
+  if (!created.ok) return created;
+  return excludeSubscription(input.merchantKey);
+}
 
 /** 구독 탭 자동탐지 결과에서 이 가맹점(merchantKey)을 숨긴다 */
 export async function excludeSubscription(merchantKey: string): Promise<ActionResult> {

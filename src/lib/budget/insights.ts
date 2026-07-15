@@ -11,12 +11,12 @@ export function paceComment(spent: number, budget: number, pace: number): string
   if (spent === 0) return "무지출 챌린지!";
   if (budget <= 0) return "";
   const ratio = spent / budget;
-  if (ratio >= 1) return "거지가 되고싶냐?";
+  if (ratio >= 1) return "예산은 넘었지만, 지금부터 아끼는 게 진짜 실력";
   const diff = ratio - pace;
-  if (diff >= 0.15) return "미쳤냐?";
-  if (diff >= 0.05) return "좀만 더 아끼자...!";
-  if (diff >= -0.05) return "슬슬 조심해야겠는걸";
-  return "이번달도 아껴쓰자!";
+  if (diff >= 0.15) return "페이스가 꽤 빨라, 이번 주는 쉬어가자";
+  if (diff >= 0.05) return "조금 빠른 페이스, 금방 따라잡을 수 있어";
+  if (diff >= -0.05) return "페이스 딱 좋아, 이대로만 가자";
+  return "페이스보다 아끼는 중, 잘하고 있어 👏";
 }
 
 /** 현재 페이스 유지 시 사이클 말 예상 지출 (1,000원 단위 반올림). */

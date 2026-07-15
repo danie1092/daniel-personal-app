@@ -10,7 +10,6 @@ import { BudgetTabs, type BudgetTab } from "./BudgetTabs";
 import { DetailsTab } from "./DetailsTab";
 import { InputTab } from "./InputTab";
 import { SummaryTab } from "./SummaryTab";
-import { SubscriptionsTab } from "./SubscriptionsTab";
 import { BudgetTrackerTab } from "./BudgetTrackerTab";
 import {
   getRecentEntries,
@@ -47,9 +46,10 @@ type SearchParams = Promise<{
 export default async function BudgetPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const yearMonth = params.ym && YM_REGEX.test(params.ym) ? params.ym : currentYearMonth();
-  const rawTab = params.tab;
+  // "subs"는 고정·구독 통합 전 URL — fixed로 흡수
+  const rawTab = params.tab === "subs" ? "fixed" : params.tab;
   const tab: BudgetTab =
-    rawTab === "input" || rawTab === "summary" || rawTab === "subs" ||
+    rawTab === "input" || rawTab === "summary" ||
     rawTab === "tracker" || rawTab === "fixed"
       ? rawTab
       : "details";
@@ -64,10 +64,10 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
       needsMonthEntries ? getMonthEntries(yearMonth) : Promise.resolve([]),
       getMonthSummary(yearMonth),
       needsBreakdown ? getCategoryBreakdown(yearMonth) : Promise.resolve([]),
-      tab === "subs" ? getRecentEntries(4) : Promise.resolve([]),
+      tab === "fixed" ? getRecentEntries(4) : Promise.resolve([]),
       tab === "summary" ? getRecentCycleSpending(yearMonth) : Promise.resolve([]),
       needsFixedItems ? getFixedExpenses() : Promise.resolve([]),
-      tab === "subs" ? getSubscriptionExclusions() : Promise.resolve(new Set<string>()),
+      tab === "fixed" ? getSubscriptionExclusions() : Promise.resolve(new Set<string>()),
       tab === "tracker" ? getBudgetOverrides(yearMonth) : Promise.resolve([]),
       tab === "tracker" ? getBudgetOverrides(nextYm) : Promise.resolve([]),
       // 커스텀 카테고리는 트래커(예산)·입력/세부(카테고리 선택지)에서 필요
@@ -78,7 +78,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
   const customNames = customs.map((c) => c.name);
 
   const subs =
-    tab === "subs"
+    tab === "fixed"
       ? detectSubscriptions(recentForSubs).filter((s) => !exclusions.has(s.key))
       : [];
   const subsTotal = monthlySubscriptionTotal(subs);
@@ -135,10 +135,9 @@ export default async function BudgetPage({ searchParams }: { searchParams: Searc
       {tab === "summary" && (
         <SummaryTab summary={summary} breakdown={breakdown} trend={trend} />
       )}
-      {tab === "subs" && (
-        <SubscriptionsTab subs={subs} monthlyTotal={subsTotal} summary={summary} />
+      {tab === "fixed" && (
+        <FixedTab items={fixedItems} subs={subs} subsTotal={subsTotal} />
       )}
-      {tab === "fixed" && <FixedTab items={fixedItems} />}
     </div>
   );
 }
