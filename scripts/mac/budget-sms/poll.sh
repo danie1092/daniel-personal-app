@@ -14,7 +14,9 @@ STATE="$DIR/state.txt"
 SECRET_FILE="$DIR/secret.env"
 FAILED_PARSES_LOG="$DIR/failed-parses.log"
 FAILED_NETWORK_LOG="$DIR/failed-network.log"
+FAILED_DECODES_LOG="$DIR/failed-decodes.log"
 RETRY_COUNT_FILE="$DIR/retry-count.txt"
+NOTIFY_STAMP="$DIR/last-notify.txt"
 
 API_URL="${BUDGET_SMS_API_URL:-https://daniel-personal-app.vercel.app/api/budget/auto}"
 CHAT_DB="$HOME/Library/Messages/chat.db"
@@ -58,6 +60,17 @@ sys.stdout.write(data[i:i+ln].decode("utf-8", "replace"))
 ' "$1" 2>/dev/null || true
 }
 
+# 같은 알림은 6시간에 1번만 (30초 폴링이라 스팸 방지)
+notify_throttled() {
+  local now last
+  now=$(date +%s)
+  last=$(cat "$NOTIFY_STAMP" 2>/dev/null || echo 0)
+  if [ $((now - last)) -ge 21600 ]; then
+    osascript -e "display notification \"$1\" with title \"budget-sms\"" || true
+    echo "$now" > "$NOTIFY_STAMP"
+  fi
+}
+
 # 결제 SMS 후보 조회.
 #  - text가 있으면 SQL에서 바로 필터 ('승인' AND '원')
 #  - text가 NULL이면 attributedBody를 hex로 뽑아 bash에서 디코드 후 필터
@@ -87,6 +100,15 @@ fi
 echo "$ROWS" | while IFS='|' read -r rowid msg_date_ns body_hex rest; do
   if [ -n "$body_hex" ]; then
     text=$(decode_body "$body_hex")
+    if [ -z "$text" ]; then
+      # attributedBody가 있는데 본문을 못 뽑음 = 저장 포맷이 또 바뀌었을 가능성.
+      # 파이프라인은 막지 않되(state 진행) 로그 + 알림으로 즉시 드러낸다.
+      echo "=== $(date -Iseconds) | rowid=$rowid | decode 실패 ===" >> "$FAILED_DECODES_LOG"
+      chmod 600 "$FAILED_DECODES_LOG"
+      notify_throttled "attributedBody 디코딩 실패 — 포맷 변경 가능성 (failed-decodes.log 확인)"
+      echo "$rowid" > "$STATE"
+      continue
+    fi
     # 결제 문자가 아니면(광고·인증 등) state만 진행하고 통과
     case "$text" in
       *승인*원*|*원*승인*) ;;

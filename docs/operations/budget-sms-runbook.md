@@ -5,6 +5,11 @@ Phase 3에서 추가된 SMS 결제문자 자동 가계부 입력 라인의 운�
 ## 구성
 
 - **맥미니**: `~/Library/Application Support/budget-sms/`에 launchd agent + poll.sh가 30초 주기로 chat.db를 SELECT.
+  - 본문은 `text` 컬럼 또는 `attributedBody` BLOB(typedstream) 두 곳 중 하나에 있다.
+    2026-07-16부터 수신 문자가 attributedBody에만 저장되기 시작해 python3 디코딩 폴백 추가 (PR #45).
+  - **watchdog.sh**(launchd, 6시간 주기): 도착 1시간+ 지난 미처리 문자가 state 뒤에 남아있으면 macOS 알림.
+    poll.sh가 조용히 멈추는 사고(launchd 죽음, 포맷 변경 등)를 당일에 알아채기 위한 장치.
+  - poll.sh 자체도 attributedBody 디코딩 실패 시 `failed-decodes.log` 기록 + 알림(6시간 스로틀).
 - **Vercel**: `/api/budget/auto`가 인증 + rate limit + 카드 파서 + 사전 조회 후 INSERT.
 - **Supabase**: `budget_entries` (UNIQUE 중복 방지), `merchant_category_map` (사전).
 
@@ -60,10 +65,14 @@ export BUDGET_SMS_API_URL="..."        # 선택, 기본은 prod 도메인
 1. `~/Library/Application Support/budget-sms/state.txt` — ROWID가 결제 SMS 도착 시점보다 큰가?
 2. `stderr.log` — 에러 메시지?
 3. `failed-parses.log` — 파싱 실패로 빠진 게 있나? 새 카드 형식이면 위 절차로 파서 추가.
-4. `failed-network.log` — 네트워크 실패 누적?
-5. 수동 호출: `bash "$HOME/Library/Application Support/budget-sms/poll.sh"`
-6. Vercel logs: `/api/budget/auto`로 들어온 호출 보기.
-7. Supabase: `select * from budget_entries order by created_at desc limit 5;`
+4. `failed-decodes.log` — attributedBody 디코딩 실패? 저장 포맷이 또 바뀐 것 → poll.sh의 decode_body 수정.
+5. `failed-network.log` — 네트워크 실패 누적?
+6. 수동 호출: `bash "$HOME/Library/Application Support/budget-sms/poll.sh"`
+7. Vercel logs: `/api/budget/auto`로 들어온 호출 보기.
+8. Supabase: `select * from budget_entries order by created_at desc limit 5;`
+
+주의: chat.db를 눈으로 확인할 때 `text` 컬럼만 보면 안 됨 — 최근 문자는 text가 NULL이고
+본문이 `attributedBody`에만 있다 (시간이 지나면 과거 행도 NULL로 바뀜).
 
 ### "401 에러 macOS 알림이 자꾸 떠요"
 
