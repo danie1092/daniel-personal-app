@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # budget-sms poll: chat.db에서 신규 결제 SMS를 잡아 Vercel API에 POST.
 # launchd가 30초마다 실행. 출력은 stdout/stderr에 → launchd log.
+#
+# 본문 위치가 두 가지다:
+#   - text 컬럼 (구형)
+#   - attributedBody BLOB (typedstream) — macOS가 text를 NULL로 두는 경우.
+#     2026-07-16부터 모든 수신 문자가 이 형태로만 들어와 폴백 디코더 추가.
 
 set -euo pipefail
 
@@ -32,17 +37,42 @@ if [ -f "$STATE" ]; then
   LAST_ROWID=$(cat "$STATE")
 fi
 
-# 결제 SMS 후보 조회 (본문에 '승인' AND '원')
+# attributedBody(typedstream) hex → 본문 텍스트. 실패 시 빈 문자열.
+decode_body() {
+  python3 -c '
+import sys
+data = bytes.fromhex(sys.argv[1])
+i = data.find(b"NSString")
+if i < 0: sys.exit(0)
+i = data.find(b"+", i)
+if i < 0: sys.exit(0)
+i += 1
+b0 = data[i]
+if b0 == 0x81:
+    ln = int.from_bytes(data[i+1:i+3], "little"); i += 3
+elif b0 == 0x82:
+    ln = int.from_bytes(data[i+1:i+5], "little"); i += 5
+else:
+    ln = b0; i += 1
+sys.stdout.write(data[i:i+ln].decode("utf-8", "replace"))
+' "$1" 2>/dev/null || true
+}
+
+# 결제 SMS 후보 조회.
+#  - text가 있으면 SQL에서 바로 필터 ('승인' AND '원')
+#  - text가 NULL이면 attributedBody를 hex로 뽑아 bash에서 디코드 후 필터
 # text 내 newline/CR을 literal \n / 빈 문자로 치환 — IFS='|' read가 깨지지 않게.
-# bash에서 printf '%b'로 \n을 실제 개행으로 복원.
+# hex는 [0-9A-F]뿐이라 구분자 안전 → text(rest)보다 앞 컬럼에 둔다.
 ROWS=$(sqlite3 -readonly "$CHAT_DB" \
   "SELECT ROWID, date,
+          CASE WHEN text IS NULL THEN hex(attributedBody) ELSE '' END,
           REPLACE(REPLACE(COALESCE(text, ''), char(13), ''), char(10), '\\n')
      FROM message
     WHERE ROWID > $LAST_ROWID
-      AND text IS NOT NULL
-      AND text LIKE '%승인%'
-      AND text LIKE '%원%'
+      AND (
+            (text LIKE '%승인%' AND text LIKE '%원%')
+         OR (text IS NULL AND attributedBody IS NOT NULL)
+      )
     ORDER BY ROWID ASC
     LIMIT 50;" 2>/dev/null) || {
   echo "[budget-sms] sqlite3 실패 (chat.db 락 또는 권한 부족)" >&2
@@ -53,10 +83,22 @@ if [ -z "$ROWS" ]; then
   exit 0
 fi
 
-# 행마다 처리: ROWID|date|text
-echo "$ROWS" | while IFS='|' read -r rowid msg_date_ns rest; do
-  # rest는 text. SQL에서 \n으로 치환됐으니 printf '%b'로 복원
-  text=$(printf '%b' "$rest")
+# 행마다 처리: ROWID|date|hex|text
+echo "$ROWS" | while IFS='|' read -r rowid msg_date_ns body_hex rest; do
+  if [ -n "$body_hex" ]; then
+    text=$(decode_body "$body_hex")
+    # 결제 문자가 아니면(광고·인증 등) state만 진행하고 통과
+    case "$text" in
+      *승인*원*|*원*승인*) ;;
+      *)
+        echo "$rowid" > "$STATE"
+        continue
+        ;;
+    esac
+  else
+    # rest는 text. SQL에서 \n으로 치환됐으니 printf '%b'로 복원
+    text=$(printf '%b' "$rest")
+  fi
 
   # Apple epoch (2001-01-01 UTC) ns → ms (Unix epoch)
   # 2001-01-01 = 978307200 (sec since 1970)
@@ -104,10 +146,11 @@ echo "$ROWS" | while IFS='|' read -r rowid msg_date_ns rest; do
       exit 1
       ;;
     429)
-      # rate limit → retry-after(헤더) 따라 sleep, state 진행 안 함
+      # rate limit → retry-after(헤더) 따라 sleep 후 이번 배치 중단.
+      # (뒤 행을 계속 처리하면 성공한 행이 state를 이 행 너머로 밀어버림)
       retry=$(grep -i '^retry-after:' /tmp/budget-sms-headers.txt | awk '{print $2}' | tr -d '\r')
       sleep "${retry:-60}" || true
-      # 다음 폴링에서 재시도
+      break
       ;;
     000|5*)
       # 네트워크 또는 서버 오류 → state 진행 안 함, 재시도 카운터 증가
@@ -124,6 +167,8 @@ echo "$ROWS" | while IFS='|' read -r rowid msg_date_ns rest; do
         rm -f "$RETRY_COUNT_FILE"
       else
         echo "$cnt" > "$RETRY_COUNT_FILE"
+        # state를 밀지 않고 다음 폴링에서 이 행부터 재시도
+        break
       fi
       ;;
     *)
