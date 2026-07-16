@@ -38,9 +38,11 @@ cat <<MSG
 MSG
 read -r _
 
-# 2) poll.sh 복사 (있으면 갱신)
+# 2) poll.sh / watchdog.sh 복사 (있으면 갱신)
 cp "$(dirname "$0")/poll.sh" "$DIR/poll.sh"
 chmod 700 "$DIR/poll.sh"
+cp "$(dirname "$0")/watchdog.sh" "$DIR/watchdog.sh"
+chmod 700 "$DIR/watchdog.sh"
 
 # 3) state.txt 초기화 (최초 1회만)
 if [ ! -f "$DIR/state.txt" ]; then
@@ -65,12 +67,19 @@ fi
 # 5) Time Machine 제외
 tmutil addexclusion "$DIR/secret.env" 2>/dev/null || true
 
-# 6) plist 설치
+# 6) plist 설치 (poll + watchdog)
 mkdir -p "$HOME/Library/LaunchAgents"
 sed "s|__HOME__|$HOME|g" "$PLIST_SRC" > "$PLIST_DST"
 launchctl unload "$PLIST_DST" 2>/dev/null || true
 launchctl load "$PLIST_DST"
 echo "[setup] launchd agent 등록 완료: $PLIST_DST"
+
+WATCHDOG_PLIST_SRC="$(dirname "$0")/com.daniel.budget-sms-watchdog.plist"
+WATCHDOG_PLIST_DST="$HOME/Library/LaunchAgents/com.daniel.budget-sms-watchdog.plist"
+sed "s|__HOME__|$HOME|g" "$WATCHDOG_PLIST_SRC" > "$WATCHDOG_PLIST_DST"
+launchctl unload "$WATCHDOG_PLIST_DST" 2>/dev/null || true
+launchctl load "$WATCHDOG_PLIST_DST"
+echo "[setup] watchdog agent 등록 완료 (6시간 주기): $WATCHDOG_PLIST_DST"
 
 cat <<DONE
 
