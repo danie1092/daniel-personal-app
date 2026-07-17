@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# budget-sms watchdog: poll.sh가 조용히 멈췄는지 감시. launchd가 6시간마다 실행.
+# budget-sms watchdog: poll.sh가 조용히 멈췄는지 감시. poll-loop.sh가 6시간마다 실행.
 #
 # 원리: poll.sh가 정상이면 "처리 대상 문자"(poll.sh의 SELECT 조건과 동일)는
 # 도착 후 30초 안에 state가 그 ROWID를 지나간다. 도착한 지 1시간이 지났는데

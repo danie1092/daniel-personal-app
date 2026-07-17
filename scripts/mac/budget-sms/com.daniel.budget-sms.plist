@@ -7,10 +7,13 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>__HOME__/Library/Application Support/budget-sms/poll.sh</string>
+    <string>__HOME__/Library/Application Support/budget-sms/poll-loop.sh</string>
   </array>
-  <key>StartInterval</key>
-  <integer>30</integer>
+  <!-- StartInterval 대신 KeepAlive 장수 프로세스.
+       launchd가 신규 스폰을 보류하는 상태(OS 업데이트 재시동 대기,
+       2026-07-17 장애)에서도 이미 떠 있는 프로세스는 계속 돌기 때문. -->
+  <key>KeepAlive</key>
+  <true/>
   <key>RunAtLoad</key>
   <true/>
   <key>StandardOutPath</key>

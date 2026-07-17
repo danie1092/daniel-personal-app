@@ -38,11 +38,11 @@ cat <<MSG
 MSG
 read -r _
 
-# 2) poll.sh / watchdog.sh 복사 (있으면 갱신)
-cp "$(dirname "$0")/poll.sh" "$DIR/poll.sh"
-chmod 700 "$DIR/poll.sh"
-cp "$(dirname "$0")/watchdog.sh" "$DIR/watchdog.sh"
-chmod 700 "$DIR/watchdog.sh"
+# 2) 스크립트 복사 (있으면 갱신)
+for f in poll.sh poll-loop.sh watchdog.sh check-heartbeat.sh; do
+  cp "$(dirname "$0")/$f" "$DIR/$f"
+  chmod 700 "$DIR/$f"
+done
 
 # 3) state.txt 초기화 (최초 1회만)
 if [ ! -f "$DIR/state.txt" ]; then
@@ -67,19 +67,48 @@ fi
 # 5) Time Machine 제외
 tmutil addexclusion "$DIR/secret.env" 2>/dev/null || true
 
-# 6) plist 설치 (poll + watchdog)
+# 6) plist 설치 — KeepAlive 장수 프로세스 (poll-loop.sh가 poll 30초 + watchdog 6시간 담당)
+# legacy launchctl load/unload는 쓰지 않는다. bootout/bootstrap(gui 도메인)이 정식 방법.
+# bootstrap 직후 kickstart: launchd가 신규 스폰을 보류하는 상태(OS 업데이트 재시동 대기)
+# 에서도 kickstart 직접 스폰은 먹히므로, 그 상태에서 설치해도 즉시 돌기 시작한다.
+UID_N=$(id -u)
 mkdir -p "$HOME/Library/LaunchAgents"
 sed "s|__HOME__|$HOME|g" "$PLIST_SRC" > "$PLIST_DST"
-launchctl unload "$PLIST_DST" 2>/dev/null || true
-launchctl load "$PLIST_DST"
+launchctl bootout "gui/$UID_N/com.daniel.budget-sms" 2>/dev/null || true
+launchctl bootstrap "gui/$UID_N" "$PLIST_DST"
+launchctl kickstart "gui/$UID_N/com.daniel.budget-sms" 2>/dev/null || true
 echo "[setup] launchd agent 등록 완료: $PLIST_DST"
 
-WATCHDOG_PLIST_SRC="$(dirname "$0")/com.daniel.budget-sms-watchdog.plist"
-WATCHDOG_PLIST_DST="$HOME/Library/LaunchAgents/com.daniel.budget-sms-watchdog.plist"
-sed "s|__HOME__|$HOME|g" "$WATCHDOG_PLIST_SRC" > "$WATCHDOG_PLIST_DST"
-launchctl unload "$WATCHDOG_PLIST_DST" 2>/dev/null || true
-launchctl load "$WATCHDOG_PLIST_DST"
-echo "[setup] watchdog agent 등록 완료 (6시간 주기): $WATCHDOG_PLIST_DST"
+# (구버전 정리) watchdog은 이제 poll-loop 안에서 돌므로 별도 agent 제거
+launchctl bootout "gui/$UID_N/com.daniel.budget-sms-watchdog" 2>/dev/null || true
+rm -f "$HOME/Library/LaunchAgents/com.daniel.budget-sms-watchdog.plist"
+
+# 7) cron 생존 감시 (30분 주기)
+# poll-loop가 남기는 heartbeat.txt가 오래되면 알림. chat.db를 읽지 않으므로
+# cron에 Full Disk Access가 없어도 동작한다. (cron으로 poll 자체를 돌리는 건
+# TCC 때문에 불가 — chat.db 접근 거부됨.)
+CRON_HEARTBEAT="*/30 * * * * /bin/bash \"$DIR/check-heartbeat.sh\" >> \"$DIR/cron.log\" 2>&1"
+( crontab -l 2>/dev/null | grep -v "budget-sms/poll.sh" | grep -v "budget-sms/watchdog.sh" | grep -v "budget-sms/check-heartbeat.sh"
+  echo "$CRON_HEARTBEAT" ) | crontab -
+echo "[setup] cron 생존 감시 등록 완료 (30분 주기 heartbeat 체크)"
+
+# 8) poll-loop가 실제로 도는지 검증 (heartbeat 갱신 확인)
+echo "[setup] poll-loop 기동 검증 중 (최대 40초)..."
+OK=""
+for _ in $(seq 1 8); do
+  sleep 5
+  HB=$(cat "$DIR/heartbeat.txt" 2>/dev/null || echo 0)
+  if [ $(( $(date +%s) - HB )) -le 60 ]; then OK=1; break; fi
+done
+if [ -n "$OK" ]; then
+  echo "[setup] poll-loop 정상 기동 (heartbeat 갱신 확인)"
+else
+  cat <<'WARN'
+[setup] ⚠️  poll-loop가 기동하지 않았습니다. 점검:
+        launchctl print gui/$(id -u)/com.daniel.budget-sms
+        tail "$HOME/Library/Application Support/budget-sms/stderr.log"
+WARN
+fi
 
 cat <<DONE
 

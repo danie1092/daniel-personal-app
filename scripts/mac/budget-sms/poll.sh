@@ -9,6 +9,9 @@
 
 set -euo pipefail
 
+# launchd/cron 어느 쪽에서 불려도 동일하게 동작하도록 PATH 고정 (jq 등)
+export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin"
+
 DIR="$HOME/Library/Application Support/budget-sms"
 STATE="$DIR/state.txt"
 SECRET_FILE="$DIR/secret.env"
@@ -32,6 +35,19 @@ if [ -z "${BUDGET_SMS_SECRET:-}" ]; then
   echo "[budget-sms] BUDGET_SMS_SECRET 비어있음" >&2
   exit 1
 fi
+
+# 동시 실행 방지 락 — launchd(30초)와 cron 백스톱(60초)이 겹쳐도 한쪽만 돈다.
+# 정상 실행은 2분 내 끝남 → 10분 넘게 남아있는 락은 죽은 프로세스 잔재로 보고 회수.
+LOCK_DIR="$DIR/poll.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  if [ -n "$(find "$LOCK_DIR" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+    mkdir "$LOCK_DIR" 2>/dev/null || exit 0
+  else
+    exit 0
+  fi
+fi
+trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
 # state 읽기
 LAST_ROWID=0
