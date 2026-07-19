@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { MEMO_TAGS } from "@/lib/constants";
 import type { MemoEntry } from "@/lib/memo/list";
 import { updateMemo, deleteMemo } from "./actions";
@@ -15,6 +15,15 @@ export function MemoEditSheet({ memo, onClose }: Props) {
   const [tag, setTag] = useState<string>(memo.tag);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  // 시트 열린 동안 바닥 스크롤 잠금 (가계부 시트들과 동일)
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   function handleSave() {
     const text = content.trim();
@@ -46,22 +55,22 @@ export function MemoEditSheet({ memo, onClose }: Props) {
     });
   }
 
+  // z-[60]: BottomNav(z-50) 위로 — 같은 층이면 나중에 그려지는 nav가 하단 버튼을 덮는다
   return (
-    <div className="fixed inset-0 z-50 flex flex-col">
+    <div className="fixed inset-0 z-[60] flex flex-col">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative mt-auto bg-surface rounded-t-sheet max-h-[85vh] flex flex-col animate-slide-up">
+      <div className="relative mt-auto bg-surface rounded-t-sheet max-h-[85dvh] flex flex-col animate-slide-up">
         <div className="flex items-center justify-between px-4 py-3 border-b border-hair-light">
           <h2 className="text-[16px] font-bold">메모 수정</h2>
           <button onClick={onClose} className="text-[13px] text-ink-sub">닫기</button>
         </div>
 
-        <div className="px-4 py-4 flex flex-col gap-3 overflow-y-auto">
+        <div className="px-4 py-4 flex flex-col gap-3 overflow-y-auto overscroll-contain">
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={6}
             maxLength={8192}
-            autoFocus
             className="w-full bg-hair-light rounded-input px-3 py-2.5 text-[13px] outline-none resize-none"
           />
 
@@ -84,7 +93,7 @@ export function MemoEditSheet({ memo, onClose }: Props) {
           {error && <p className="text-[12px] text-danger">{error}</p>}
         </div>
 
-        <div className="px-4 py-3 border-t border-hair-light flex gap-2">
+        <div className="px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-hair-light flex gap-2">
           <button
             onClick={handleDelete}
             disabled={pending}
